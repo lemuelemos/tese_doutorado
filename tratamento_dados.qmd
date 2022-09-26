@@ -1,0 +1,202 @@
+---
+title: "Tratamento dos Dados"
+author: "Lemuel Lemos"
+format: html
+---
+
+```{r carregamento de dados,message=FALSE,warning=F}
+source("global.R")
+board <- board_folder("dados_tese/",versioned = T)
+cad_fi <- pin_read(board,"cad_fi")
+extrato_fi_atual <- pin_read(board,"extrato_fi_atual")
+```
+
+## Integração das Informações cadastrais e de Extrato de Informações
+
+Nessa estapa vou integras as bases de dados de cadastro de informações cadastrais. Aqui já havia notado uma inconstência nos dados de cadastro, onde as informações de classe ANBIMA, por exemplo, e da CVM não coincidem.
+
+### Tratamento de inconsistências
+
+O primeiro critério é que o fundo esteja na data atuala na situação de em funcionamento normal e que sejam fundos de investimentos da intrução ICVM 555. Dessa forma, vamos pegar apenas fundos que não foram cancelados, incluindo assim situações que nem todos os fundos possuirão dados desde o ínicio da amostra.
+
+```{r tratamento_inicial,message=FALSE,warning=F}
+cad_fi |> 
+  filter(TP_FUNDO == "FI") |> 
+  filter(SIT == "EM FUNCIONAMENTO NORMAL") |> 
+  select(TP_FUNDO,
+         CNPJ_FUNDO,
+         CPF_CNPJ_GESTOR,SIT,
+         DT_CANCEL,
+         DT_CONST,
+         DT_INI_EXERC,
+         FUNDO_COTAS,
+         CLASSE,
+         GESTOR,
+         PF_PJ_GESTOR,
+         ENTID_INVEST,
+         TRIB_LPRAZO,
+         CONDOM,
+         FUNDO_EXCLUSIVO,
+         RENTAB_FUNDO) -> cad_fi
+
+
+extrato_fi_atual |> 
+  filter(CNPJ_FUNDO %in% cad_fi$CNPJ_FUNDO) |> 
+  select(CNPJ_FUNDO,
+         DENOM_SOCIAL,
+         DT_COMPTC,
+         NEGOC_MERC,
+         MERCADO,
+         TP_PRAZO,
+         PRAZO,
+         PUBLICO_ALVO,
+         REG_ANBIMA,
+         CLASSE_ANBIMA,
+         DISTRIB,
+         POLIT_INVEST,
+         FUNDO_COTAS,
+         FUNDO_ESPELHO,
+         FUNDO_COTAS,
+         TAXA_SAIDA_PAGTO_RESGATE,
+         EXISTE_TAXA_PERFM,
+         TAXA_PERFM,
+         PARAM_TAXA_PERFM,
+         CALC_TAXA_PERFM) |> 
+  left_join(cad_fi, by = "CNPJ_FUNDO") |>
+  filter(REG_ANBIMA == "S") |> 
+  filter(PF_PJ_GESTOR == "PJ") |>
+  filter(!((FUNDO_COTAS.x == "S" & FUNDO_COTAS.y == "N") | 
+             (FUNDO_COTAS.x == "N" & FUNDO_COTAS.y == "S"))) |> 
+  filter(!(CLASSE == "Fundo de Ações" & str_detect(CLASSE_ANBIMA,"RENDA FIXA"))) |> 
+  filter(!(CLASSE == " Renda Fixa" & str_detect(CLASSE_ANBIMA,"AÇÕES"))) |>
+  select(-contains(".y")) |> 
+  filter(CLASSE %in% c("Fundo de Ações","Fundo Multimercado","Fundo de Renda Fixa")) -> extrato_fi_atual
+
+```
+
+Após isso, é feito o pareamento das bases de cadastro e extrato de informações, a fim de complementar as informações. Outros filtros foram aplicados, o primeiro é com a insconsistência de infromações quanto aos fundos serem fundos de cotas ou não. Em todas as situações que estas informações foram diferentes nas duas bases as mesmas foram excluídas. A lista abaixo detalhará todos os tratamentos utilizados.
+
+1.  Apenas fundos sujeitos a regulação Anbima;
+
+2.  Apenas gestores PJ;
+
+3.  Fundos com inconsistências nas bases no questio de serem fundos de cotas ou não foram excluídos da base;
+
+4.  Fundos que na classe CVM são de ações e na classe Anbima tiverem denominação Renda Fixa foram excluídos;
+
+5.  Fundos que na classe CVM são Renda Fixa e na classe Anbima tiverem ações foram excluídos.
+
+6.  Utilizaremos para a análise apenas fundos de Renda Fixa, Ações e Multimercados.
+
+## Pareamento com a Base de Informes diários
+
+Aqui foi pareado as bases de dados com os dados de informes diários. Primeiro fintrando apenas os fundos que estão no nosso tratamento de dados, depois com um join e separando por classe de fundos, devido a ser dessa maneira que vamos estimar os modelos.
+
+```{r pareamento_inf_diario,message=FALSE,warning=F}
+
+informe_diario_fundos <- pin_read(board,"informe_diario_fundos") |>
+  select(-TP_FUNDO) |> 
+  lazy_dt()
+
+informe_diario_fundos |> 
+  filter(CNPJ_FUNDO %in% extrato_fi_atual$CNPJ_FUNDO) -> informe_diario_fundos
+  
+informe_diario_fundos |> 
+  left_join(select(extrato_fi_atual,-DT_COMPTC), by = "CNPJ_FUNDO") |>
+  filter(CLASSE == "Fundo de Ações") |> 
+  collect() -> informe_diario_fundos_acoes
+
+informe_diario_fundos |> 
+  left_join(select(extrato_fi_atual,-DT_COMPTC), by = "CNPJ_FUNDO") |>
+  filter(CLASSE == "Fundo Multimercado") |> 
+  collect() -> informe_diario_fundos_multimercado
+
+informe_diario_fundos |> 
+  left_join(select(extrato_fi_atual,-DT_COMPTC), by = "CNPJ_FUNDO") |>
+  filter(CLASSE == "Fundo de Renda Fixa") |> 
+  collect() -> informe_diario_fundos_rf
+
+
+```
+
+#### Manipulando Informes Diários
+
+#### Fundos de Ações
+
+```{r pareamento_inf_dia_acoes}
+informe_diario_fundos_acoes |> 
+  filter(CPF_CNPJ_GESTOR %in% BANCOES_VEREJO) |> 
+  mutate(Competência = yearmonth(DT_COMPTC)) |> 
+  group_by(Competência) |> 
+  summarise(CAPTC_DIA = sum(CAPTC_DIA),
+            RESG_DIA = sum(RESG_DIA)) |> 
+  mutate(CAPTC_LIQ = CAPTC_DIA-RESG_DIA) |> 
+  mutate(CAPTC_LIQ_P = (CAPTC_LIQ-mean(CAPTC_LIQ))/sd(CAPTC_LIQ)) |> 
+  ggplot(aes(Competência,CAPTC_LIQ_P)) +
+  geom_line()
+```
+
+```{r}
+informe_diario_fundos_acoes |> 
+  filter(!CPF_CNPJ_GESTOR %in% BANCOES_VEREJO) |> 
+  mutate(Competência = yearmonth(DT_COMPTC)) |> 
+  group_by(Competência) |> 
+  summarise(CAPTC_DIA = sum(CAPTC_DIA),
+            RESG_DIA = sum(RESG_DIA)) |> 
+  mutate(CAPTC_LIQ = CAPTC_DIA-RESG_DIA) |> 
+  mutate(CAPTC_LIQ_P = (CAPTC_LIQ-mean(CAPTC_LIQ))/sd(CAPTC_LIQ)) |> 
+  ggplot(aes(Competência,CAPTC_LIQ_P)) +
+  geom_line()
+```
+
+#### Fundos Multimercados
+
+```{r pareamento_inf_dia_multimercado}
+informe_diario_fundos_multimercado |> 
+  filter(CPF_CNPJ_GESTOR %in% BANCOES_VEREJO) |>
+  mutate(Competência = yearmonth(DT_COMPTC)) |> 
+  group_by(Competência) |> 
+  summarise(CAPTC_DIA = sum(CAPTC_DIA),
+            RESG_DIA = sum(RESG_DIA)) |> 
+  mutate(CAPTC_LIQ = CAPTC_DIA-RESG_DIA) |> 
+  ggplot(aes(Competência,CAPTC_LIQ)) +
+  geom_line()
+```
+
+```{r}
+informe_diario_fundos_multimercado |> 
+  filter(!CPF_CNPJ_GESTOR %in% BANCOES_VEREJO) |>
+  mutate(Competência = yearmonth(DT_COMPTC)) |> 
+  group_by(Competência) |> 
+  summarise(CAPTC_DIA = sum(CAPTC_DIA),
+            RESG_DIA = sum(RESG_DIA)) |> 
+  mutate(CAPTC_LIQ = CAPTC_DIA-RESG_DIA) |> 
+  ggplot(aes(Competência,CAPTC_LIQ)) +
+  geom_line()
+```
+
+#### Fundos de Renda Fixa
+
+```{r}
+informe_diario_fundos_rf |> 
+  filter(CPF_CNPJ_GESTOR %in% BANCOES_VEREJO) |>
+  mutate(Competência = yearmonth(DT_COMPTC)) |> 
+  group_by(Competência) |> 
+  summarise(CAPTC_DIA = sum(CAPTC_DIA),
+            RESG_DIA = sum(RESG_DIA)) |> 
+  mutate(CAPTC_LIQ = CAPTC_DIA-RESG_DIA) |> 
+  ggplot(aes(Competência,CAPTC_LIQ)) +
+  geom_line()
+```
+
+```{r pareamento_inf_rf}
+informe_diario_fundos_rf |> 
+  filter(!CPF_CNPJ_GESTOR %in% BANCOES_VEREJO) |>
+  mutate(Competência = yearmonth(DT_COMPTC)) |> 
+  group_by(Competência) |> 
+  summarise(CAPTC_DIA = sum(CAPTC_DIA),
+            RESG_DIA = sum(RESG_DIA)) |> 
+  mutate(CAPTC_LIQ = CAPTC_DIA-RESG_DIA) |> 
+  ggplot(aes(Competência,CAPTC_LIQ)) +
+  geom_line()
+```

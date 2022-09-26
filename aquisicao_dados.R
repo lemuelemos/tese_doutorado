@@ -1,3 +1,4 @@
+source("global.R")
 ##### Dados Macroeconômicos #####
 
 ###### Expactativas de Inflação 12 meses ######
@@ -39,9 +40,12 @@ di1_futures |>
   select(refdate,symbol,adjusted_tax) |> 
   group_by(refdate) |> 
   tidyr::nest() |> 
-  mutate(data = lapply(data,function(df) tidyr::pivot_wider(df,names_from = symbol,values_from = adjusted_tax))) |> 
-  mutate(data = purrr::map(data,function(df) df |> mutate(Abertura_Curva5A = .[[6]]-.[[1]],
-                                                           Abertura_Curva10A = tryCatch({.[[11]]-.[[1]]},error = function(e) NA)))) |> 
+  mutate(data = lapply(data,function(df) tidyr::pivot_wider(df,
+                                                            names_from = symbol,
+                                                            values_from = adjusted_tax))) |> 
+  mutate(data = purrr::map(data,function(df) df %>% mutate(Abertura_Curva5A = .[[6]]-.[[1]],
+                                                           Abertura_Curva10A = tryCatch({.[[11]]-.[[1]]},
+                                                                                        error = function(e) NA)))) |> 
   tidyr::unnest(data) |> 
   select(-starts_with("DI1")) -> Aberturas_Curva
 
