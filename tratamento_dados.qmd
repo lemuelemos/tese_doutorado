@@ -111,11 +111,16 @@ informe_diario_fundos |>
   filter(CLASSE == "Fundo Multimercado") |> 
   collect() -> informe_diario_fundos_multimercado
 
+informe_diario_fundos_multimercado |> 
+  filter(!CNPJ_FUNDO %in% distinct(filter(informe_diario_fundos_multimercado ,VL_PATRIM_LIQ < 0),CNPJ_FUNDO)$CNPJ_FUNDO) -> informe_diario_fundos_multimercado
+
 informe_diario_fundos |> 
   left_join(select(extrato_fi_atual,-DT_COMPTC), by = "CNPJ_FUNDO") |>
   filter(CLASSE == "Fundo de Renda Fixa") |> 
   collect() -> informe_diario_fundos_rf
 
+informe_diario_fundos_rf |> 
+  filter(!CNPJ_FUNDO %in% distinct(filter(informe_diario_fundos_rf ,VL_PATRIM_LIQ < 0),CNPJ_FUNDO)$CNPJ_FUNDO) -> informe_diario_fundos_rf
 
 ```
 
@@ -199,4 +204,1103 @@ informe_diario_fundos_rf |>
   mutate(CAPTC_LIQ = CAPTC_DIA-RESG_DIA) |> 
   ggplot(aes(Competência,CAPTC_LIQ)) +
   geom_line()
+```
+
+### Distribuição de Captação
+
+#### Fundos Multimercado
+
+```{r}
+informe_diario_fundos_multimercado |> 
+  select(DT_COMPTC,CPF_CNPJ_GESTOR,CAPTC_DIA,RESG_DIA) |> 
+  left_join(tibble(CPF_CNPJ_GESTOR = BANCOES_VEREJO,
+                   GRUPO = "Grandes Bancos"), 
+            by = "CPF_CNPJ_GESTOR") |> 
+  mutate(GRUPO = case_when(is.na(GRUPO) ~ "Demais Instituições",
+                           T ~ GRUPO)) |> 
+  mutate(Competência = yearmonth(DT_COMPTC)) |> 
+  group_by(Competência,GRUPO) |> 
+  summarise(CAPTC_DIA = sum(CAPTC_DIA),
+            RESG_DIA = sum(RESG_DIA)) |> 
+  group_by(Competência,GRUPO) |> 
+  mutate(CAPTC_LIQ = (CAPTC_DIA-RESG_DIA)/100000000)  |> 
+  ggplot(aes(CAPTC_LIQ,color=GRUPO,fill=GRUPO)) +
+  geom_histogram(bins = 10,
+                 position="identity",
+                 alpha=0.5) -> hist_multi
+
+
+hist_multi +
+  scale_color_grey() +
+  scale_fill_grey() +
+  theme_classic() +
+  labs(title="Captação Líquida Fundos Multimercados",
+       x="Captação Líquida - Valores em 100 milhões", 
+       y = "Quantidade de Fundos")
+```
+
+#### Fundos Renda Fixa
+
+```{r}
+informe_diario_fundos_rf |> 
+  select(DT_COMPTC,CPF_CNPJ_GESTOR,CAPTC_DIA,RESG_DIA) |> 
+  left_join(tibble(CPF_CNPJ_GESTOR = BANCOES_VEREJO,
+                   GRUPO = "Grandes Bancos"), 
+            by = "CPF_CNPJ_GESTOR") |> 
+  mutate(GRUPO = case_when(is.na(GRUPO) ~ "Demais Instituições",
+                           T ~ GRUPO)) |> 
+  mutate(Competência = yearmonth(DT_COMPTC)) |> 
+  group_by(Competência,GRUPO) |> 
+  summarise(CAPTC_DIA = sum(CAPTC_DIA),
+            RESG_DIA = sum(RESG_DIA)) |> 
+  group_by(Competência,GRUPO) |> 
+  mutate(CAPTC_LIQ = (CAPTC_DIA-RESG_DIA)/100000000)  |> 
+  ggplot(aes(CAPTC_LIQ,color=GRUPO,fill=GRUPO)) +
+  geom_histogram(bins = 10,
+                 position="identity",
+                 alpha=0.5) -> hist_rf
+
+
+
+hist_rf +
+  scale_color_grey() +
+  scale_fill_grey() +
+  theme_classic() +
+  labs(title="Captação Líquida Fundos de Renda Fixa",
+       x="Captação Líquida - Valores em 100 milhões", 
+       y = "Quantidade de Fundos")
+```
+
+#### Fundos de Ações
+
+```{r}
+informe_diario_fundos_acoes |> 
+  select(DT_COMPTC,CPF_CNPJ_GESTOR,CAPTC_DIA,RESG_DIA) |> 
+  left_join(tibble(CPF_CNPJ_GESTOR = BANCOES_VEREJO,
+                   GRUPO = "Grandes Bancos"), 
+            by = "CPF_CNPJ_GESTOR") |> 
+  mutate(GRUPO = case_when(is.na(GRUPO) ~ "Demais Instituições",
+                           T ~ GRUPO)) |> 
+  mutate(Competência = yearmonth(DT_COMPTC)) |> 
+  group_by(Competência,GRUPO) |> 
+  summarise(CAPTC_DIA = sum(CAPTC_DIA),
+            RESG_DIA = sum(RESG_DIA)) |> 
+  group_by(Competência,GRUPO) |> 
+  mutate(CAPTC_LIQ = (CAPTC_DIA-RESG_DIA)/100000000)  |> 
+  ggplot(aes(CAPTC_LIQ,color=GRUPO,fill=GRUPO)) +
+  geom_histogram(bins = 10,
+                 position="identity",
+                 alpha=0.5) -> hist_acoes
+
+hist_acoes +
+  scale_color_grey() +
+  scale_fill_grey() +
+  theme_classic() +
+  labs(title="Captação Líquida Fundos de Ações",
+       x="Captação Líquida - Valores em 100 milhões", 
+       y = "Quantidade de Fundos")
+```
+
+### Manipulação de dados por Perídos
+
+#### Fundos de Ações
+
+```{r}
+informe_diario_fundos_acoes |> 
+  lazy_dt() |> 
+  select(DT_COMPTC,
+         CNPJ_FUNDO,
+         TRIB_LPRAZO,
+         CLASSE,
+         CLASSE_ANBIMA,
+         PUBLICO_ALVO,
+         FUNDO_COTAS.x,
+         EXISTE_TAXA_PERFM,
+         TAXA_PERFM,
+         CPF_CNPJ_GESTOR,
+         PF_PJ_GESTOR,
+         ENTID_INVEST,
+         CONDOM,
+         FUNDO_ESPELHO,
+         VL_PATRIM_LIQ,
+         CAPTC_DIA,
+         RESG_DIA,
+         VL_QUOTA) |> 
+  rename(FUNDO_COTAS = FUNDO_COTAS.x) |> 
+  left_join(tibble(CPF_CNPJ_GESTOR = BANCOES_VEREJO,
+                   GRUPO = "Grandes Bancos"), 
+            by = "CPF_CNPJ_GESTOR") |> 
+  mutate(GRUPO = case_when(is.na(GRUPO) ~ "Demais Instituições",
+                           T ~ GRUPO)) |> 
+  mutate(MÊS = yearmonth(DT_COMPTC)) |> 
+  mutate(ANO = lubridate::year(DT_COMPTC)) |> 
+  mutate(TRIMESTRE = yearquarter(DT_COMPTC)) |> 
+  mutate(SEMESTRE = paste0(ANO," S",lubridate::semester(DT_COMPTC))) |> 
+  mutate(TRIB_LPRAZO = case_when(is.na(TRIB_LPRAZO) | 
+                                 TRIB_LPRAZO == "N/A" |
+                                 TRIB_LPRAZO == "N" ~ 0,
+                                 TRIB_LPRAZO == "S" ~ 1)) |>
+  mutate(FUNDO_ESPELHO = case_when(FUNDO_ESPELHO == "N" |
+                                   is.na(FUNDO_ESPELHO) ~ 0,
+                                   FUNDO_ESPELHO == "S" ~ 1)) |> 
+  mutate(FUNDO_COTAS = case_when(FUNDO_COTAS == "N" ~ 0,
+                                 FUNDO_COTAS == "S" ~ 1)) |> 
+  mutate(EXISTE_TAXA_PERFM = case_when(EXISTE_TAXA_PERFM == "N" ~ 0,
+                                       T  ~ 1)) |> 
+  relocate(ANO,.after = DT_COMPTC) |> 
+  relocate(SEMESTRE,.after = ANO) |>
+  relocate(TRIMESTRE,.after = SEMESTRE) |>
+  relocate(`MÊS`,.after = TRIMESTRE) |>
+  collect() -> dados_painel_acoes
+```
+
+#### Fundos Multimercados
+
+```{r}
+informe_diario_fundos_multimercado |> 
+  lazy_dt() |> 
+  select(DT_COMPTC,
+         CNPJ_FUNDO,
+         TRIB_LPRAZO,
+         CLASSE,
+         CLASSE_ANBIMA,
+         PUBLICO_ALVO,
+         FUNDO_COTAS.x,
+         EXISTE_TAXA_PERFM,
+         TAXA_PERFM,
+         CPF_CNPJ_GESTOR,
+         PF_PJ_GESTOR,
+         ENTID_INVEST,
+         CONDOM,
+         FUNDO_ESPELHO,
+         VL_PATRIM_LIQ,
+         CAPTC_DIA,
+         RESG_DIA,
+         VL_QUOTA) |> 
+  rename(FUNDO_COTAS = FUNDO_COTAS.x) |> 
+  left_join(tibble(CPF_CNPJ_GESTOR = BANCOES_VEREJO,
+                   GRUPO = "Grandes Bancos"), 
+            by = "CPF_CNPJ_GESTOR") |> 
+  mutate(GRUPO = case_when(is.na(GRUPO) ~ "Demais Instituições",
+                           T ~ GRUPO)) |> 
+  mutate(MÊS = yearmonth(DT_COMPTC)) |> 
+  mutate(ANO = lubridate::year(DT_COMPTC)) |> 
+  mutate(TRIMESTRE = yearquarter(DT_COMPTC)) |> 
+  mutate(SEMESTRE = paste0(ANO," S",lubridate::semester(DT_COMPTC))) |> 
+  mutate(TRIB_LPRAZO = case_when(is.na(TRIB_LPRAZO) | 
+                                 TRIB_LPRAZO == "N/A" |
+                                 TRIB_LPRAZO == "N" ~ 0,
+                                 TRIB_LPRAZO == "S" ~ 1)) |>
+  mutate(FUNDO_ESPELHO = case_when(FUNDO_ESPELHO == "N" |
+                                   is.na(FUNDO_ESPELHO) ~ 0,
+                                   FUNDO_ESPELHO == "S" ~ 1)) |> 
+  mutate(FUNDO_COTAS = case_when(FUNDO_COTAS == "N" ~ 0,
+                                 FUNDO_COTAS == "S" ~ 1)) |> 
+  mutate(EXISTE_TAXA_PERFM = case_when(EXISTE_TAXA_PERFM == "N" ~ 0,
+                                       T  ~ 1)) |> 
+  relocate(ANO,.after = DT_COMPTC) |> 
+  relocate(SEMESTRE,.after = ANO) |>
+  relocate(TRIMESTRE,.after = SEMESTRE) |>
+  relocate(`MÊS`,.after = TRIMESTRE) |>
+  collect() -> dados_painel_mm
+```
+
+#### Fundos de Renda Fixa
+
+```{r}
+informe_diario_fundos_rf |> 
+  lazy_dt() |> 
+  select(DT_COMPTC,
+         CNPJ_FUNDO,
+         TRIB_LPRAZO,
+         CLASSE,
+         CLASSE_ANBIMA,
+         PUBLICO_ALVO,
+         FUNDO_COTAS.x,
+         EXISTE_TAXA_PERFM,
+         TAXA_PERFM,
+         CPF_CNPJ_GESTOR,
+         PF_PJ_GESTOR,
+         ENTID_INVEST,
+         CONDOM,
+         FUNDO_ESPELHO,
+         VL_PATRIM_LIQ,
+         CAPTC_DIA,
+         RESG_DIA,
+         VL_QUOTA) |> 
+  rename(FUNDO_COTAS = FUNDO_COTAS.x) |> 
+  left_join(tibble(CPF_CNPJ_GESTOR = BANCOES_VEREJO,
+                   GRUPO = "Grandes Bancos"), 
+            by = "CPF_CNPJ_GESTOR") |> 
+  mutate(GRUPO = case_when(is.na(GRUPO) ~ "Demais Instituições",
+                           T ~ GRUPO)) |> 
+  mutate(MÊS = yearmonth(DT_COMPTC)) |> 
+  mutate(ANO = lubridate::year(DT_COMPTC)) |> 
+  mutate(TRIMESTRE = yearquarter(DT_COMPTC)) |> 
+  mutate(SEMESTRE = paste0(ANO," S",lubridate::semester(DT_COMPTC))) |> 
+  mutate(TRIB_LPRAZO = case_when(is.na(TRIB_LPRAZO) | 
+                                 TRIB_LPRAZO == "N/A" |
+                                 TRIB_LPRAZO == "N" ~ 0,
+                                 TRIB_LPRAZO == "S" ~ 1)) |>
+  mutate(FUNDO_ESPELHO = case_when(FUNDO_ESPELHO == "N" |
+                                   is.na(FUNDO_ESPELHO) ~ 0,
+                                   FUNDO_ESPELHO == "S" ~ 1)) |> 
+  mutate(FUNDO_COTAS = case_when(FUNDO_COTAS == "N" ~ 0,
+                                 FUNDO_COTAS == "S" ~ 1)) |> 
+  mutate(EXISTE_TAXA_PERFM = case_when(EXISTE_TAXA_PERFM == "N" ~ 0,
+                                       T  ~ 1)) |> 
+  relocate(ANO,.after = DT_COMPTC) |> 
+  relocate(SEMESTRE,.after = ANO) |>
+  relocate(TRIMESTRE,.after = SEMESTRE) |>
+  relocate(`MÊS`,.after = TRIMESTRE) |>
+  collect() -> dados_painel_rf
+```
+
+#### Manipulação de Dados fundos de Ações
+
+```{r message=FALSE,warning=F}
+dados_painel_acoes |> 
+  lazy_dt() |> 
+  select(-SEMESTRE,-TRIMESTRE,-MÊS) |> 
+  mutate(ANO = as.character(ANO)) |>
+  group_by(ANO,CNPJ_FUNDO) |> 
+  arrange(DT_COMPTC) |> 
+  summarise(CAPTC_DIA = sum(CAPTC_DIA),
+            RESG_DIA = sum(RESG_DIA),
+            GRUPO = dplyr::last(GRUPO),
+            VL_PATRIM_LIQ = dplyr::first(VL_PATRIM_LIQ),
+            RENTABILIDADE = (dplyr::last(VL_QUOTA)/
+                               dplyr::first(VL_QUOTA))-1,
+            FUNDO_COTAS = dplyr::first(FUNDO_COTAS),
+            PUBLICO_ALVO = dplyr::first(PUBLICO_ALVO),
+            EXISTE_TAXA_PERFM = dplyr::first(EXISTE_TAXA_PERFM),
+            CLASSE_ANBIMA = dplyr::first(CLASSE_ANBIMA),
+            FUNDO_ESPELHO = dplyr::first(FUNDO_ESPELHO),
+            TRIB_LPRAZO = dplyr::first(TRIB_LPRAZO)) |> 
+  mutate(RENTABILIDADE = case_when(RENTABILIDADE == Inf ~ 0,
+                                   T ~ RENTABILIDADE)) |> 
+  mutate(CAPTC_LIQ = CAPTC_DIA-RESG_DIA) |> 
+  mutate(TAMANHO = case_when(VL_PATRIM_LIQ >= 15000000 &
+                             VL_PATRIM_LIQ <  50000000 ~ "Pequeno",
+                             VL_PATRIM_LIQ >= 50000000 &
+                             VL_PATRIM_LIQ <  250000000 ~ "Médio",
+                             VL_PATRIM_LIQ >= 250000000 &
+                             VL_PATRIM_LIQ <  1000000000 ~ "Grande",
+                             VL_PATRIM_LIQ >= 1000000000 ~ "Gigante",
+                             T ~ "Micro")) |> 
+  mutate(TAMANHO_CAP = case_when(CAPTC_LIQ >= 15000000 & 
+                                 CAPTC_LIQ <   50000000 ~ "Pequeno",
+                                 CAPTC_LIQ <= -15000000 & 
+                                 CAPTC_LIQ >  -50000000 ~ "Pequeno",
+                                 CAPTC_LIQ >= 50000000 & 
+                                 CAPTC_LIQ <   250000000 ~ "Médio",
+                                 CAPTC_LIQ <= -50000000  & 
+                                 CAPTC_LIQ >  -250000000 ~ "Médio",
+                                 CAPTC_LIQ >= 250000000  & 
+                                 CAPTC_LIQ <   1000000000 ~ "Grande",
+                                 CAPTC_LIQ <= -250000000 & 
+                                 CAPTC_LIQ >  -1000000000 ~ "Grande",
+                                 CAPTC_LIQ >= 1000000000 | 
+                                 CAPTC_LIQ <= -1000000000 ~ "Gigante",
+                                 T ~ "Micro")) |> 
+  mutate(TAMANHO = case_when(TAMANHO == "Grande" & 
+                             TAMANHO_CAP == "Gigante" ~ "Gigante",
+                             TAMANHO == "Médio" & 
+                             TAMANHO_CAP == "Gigante" ~ "Gigante",
+                             TAMANHO == "Médio" & 
+                             TAMANHO_CAP == "Grande" ~ "Grande",
+                             TAMANHO == "Pequeno" & 
+                             TAMANHO_CAP == "Grande" ~ "Grande",
+                             TAMANHO == "Pequeno" & 
+                             TAMANHO_CAP == "Médio" ~ "Médio",
+                             TAMANHO == "Micro" & 
+                             TAMANHO_CAP != "Micro" ~ TAMANHO_CAP,
+                             T ~ TAMANHO)) |> 
+  collect() |> 
+  ungroup() -> dados_painel_acoes_ano
+
+dados_painel_acoes |> 
+  lazy_dt() |> 
+  select(-ANO,-TRIMESTRE,-MÊS) |> 
+  group_by(SEMESTRE,CNPJ_FUNDO) |> 
+  arrange(DT_COMPTC) |> 
+  summarise(CAPTC_DIA = sum(CAPTC_DIA),
+            RESG_DIA = sum(RESG_DIA),
+            GRUPO = dplyr::last(GRUPO),
+            VL_PATRIM_LIQ = dplyr::first(VL_PATRIM_LIQ),
+            RENTABILIDADE = (dplyr::last(VL_QUOTA)/
+                               dplyr::first(VL_QUOTA))-1,
+            FUNDO_COTAS = dplyr::first(FUNDO_COTAS),
+            PUBLICO_ALVO = dplyr::first(PUBLICO_ALVO),
+            EXISTE_TAXA_PERFM = dplyr::first(EXISTE_TAXA_PERFM),
+            CLASSE_ANBIMA = dplyr::first(CLASSE_ANBIMA),
+            FUNDO_ESPELHO = dplyr::first(FUNDO_ESPELHO),
+            TRIB_LPRAZO = dplyr::first(TRIB_LPRAZO)) |> 
+  mutate(RENTABILIDADE = case_when(RENTABILIDADE == Inf ~ 0,
+                                   T ~ RENTABILIDADE)) |> 
+  mutate(CAPTC_LIQ = CAPTC_DIA-RESG_DIA) |> 
+  mutate(SEMESTRE = as.character(SEMESTRE)) |> 
+  mutate(TAMANHO = case_when(VL_PATRIM_LIQ >= 15000000 &
+                             VL_PATRIM_LIQ <  50000000 ~ "Pequeno",
+                             VL_PATRIM_LIQ >= 50000000 &
+                             VL_PATRIM_LIQ <  250000000 ~ "Médio",
+                             VL_PATRIM_LIQ >= 250000000 &
+                             VL_PATRIM_LIQ <  1000000000 ~ "Grande",
+                             VL_PATRIM_LIQ >= 1000000000 ~ "Gigante",
+                             T ~ "Micro")) |> 
+  mutate(TAMANHO_CAP = case_when(CAPTC_LIQ >= 15000000 & 
+                                 CAPTC_LIQ <   50000000 ~ "Pequeno",
+                                 CAPTC_LIQ <= -15000000 & 
+                                 CAPTC_LIQ >  -50000000 ~ "Pequeno",
+                                 CAPTC_LIQ >= 50000000 & 
+                                 CAPTC_LIQ <   250000000 ~ "Médio",
+                                 CAPTC_LIQ <= -50000000  & 
+                                 CAPTC_LIQ >  -250000000 ~ "Médio",
+                                 CAPTC_LIQ >= 250000000  & 
+                                 CAPTC_LIQ <   1000000000 ~ "Grande",
+                                 CAPTC_LIQ <= -250000000 & 
+                                 CAPTC_LIQ >  -1000000000 ~ "Grande",
+                                 CAPTC_LIQ >= 1000000000 | 
+                                 CAPTC_LIQ <= -1000000000 ~ "Gigante",
+                                 T ~ "Micro")) |> 
+  mutate(TAMANHO = case_when(TAMANHO == "Grande" & 
+                             TAMANHO_CAP == "Gigante" ~ "Gigante",
+                             TAMANHO == "Médio" & 
+                             TAMANHO_CAP == "Gigante" ~ "Gigante",
+                             TAMANHO == "Médio" & 
+                             TAMANHO_CAP == "Grande" ~ "Grande",
+                             TAMANHO == "Pequeno" & 
+                             TAMANHO_CAP == "Grande" ~ "Grande",
+                             TAMANHO == "Pequeno" & 
+                             TAMANHO_CAP == "Médio" ~ "Médio",
+                             TAMANHO == "Micro" & 
+                             TAMANHO_CAP != "Micro" ~ TAMANHO_CAP,
+                             T ~ TAMANHO)) |> 
+  collect() |> 
+  ungroup() -> dados_painel_acoes_semestre
+
+dados_painel_acoes |> 
+  lazy_dt() |> 
+  filter(CONDOM == "Aberto") |>
+  select(-SEMESTRE,-ANO,-MÊS) |> 
+  group_by(TRIMESTRE,CNPJ_FUNDO) |> 
+  arrange(DT_COMPTC) |> 
+  summarise(CAPTC_DIA = sum(CAPTC_DIA),
+            RESG_DIA = sum(RESG_DIA),
+            GRUPO = dplyr::last(GRUPO),
+            VL_PATRIM_LIQ = dplyr::first(VL_PATRIM_LIQ),
+            RENTABILIDADE = (dplyr::last(VL_QUOTA)/
+                               dplyr::first(VL_QUOTA))-1,
+            FUNDO_COTAS = dplyr::first(FUNDO_COTAS),
+            PUBLICO_ALVO = dplyr::first(PUBLICO_ALVO),
+            EXISTE_TAXA_PERFM = dplyr::first(EXISTE_TAXA_PERFM),
+            CLASSE_ANBIMA = dplyr::first(CLASSE_ANBIMA),
+            FUNDO_ESPELHO = dplyr::first(FUNDO_ESPELHO),
+            TRIB_LPRAZO = dplyr::first(TRIB_LPRAZO)) |> 
+  mutate(RENTABILIDADE = case_when(RENTABILIDADE == Inf ~ 0,
+                                   T ~ RENTABILIDADE)) |> 
+  mutate(CAPTC_LIQ = CAPTC_DIA-RESG_DIA) |> 
+  mutate(TAMANHO = case_when(VL_PATRIM_LIQ >= 15000000 &
+                             VL_PATRIM_LIQ <  50000000 ~ "Pequeno",
+                             VL_PATRIM_LIQ >= 50000000 &
+                             VL_PATRIM_LIQ <  250000000 ~ "Médio",
+                             VL_PATRIM_LIQ >= 250000000 &
+                             VL_PATRIM_LIQ <  1000000000 ~ "Grande",
+                             VL_PATRIM_LIQ >= 1000000000 ~ "Gigante",
+                             T ~ "Micro")) |> 
+  mutate(TAMANHO_CAP = case_when(CAPTC_LIQ >= 15000000 & 
+                                 CAPTC_LIQ <   50000000 ~ "Pequeno",
+                                 CAPTC_LIQ <= -15000000 & 
+                                 CAPTC_LIQ >  -50000000 ~ "Pequeno",
+                                 CAPTC_LIQ >= 50000000 & 
+                                 CAPTC_LIQ <   250000000 ~ "Médio",
+                                 CAPTC_LIQ <= -50000000  & 
+                                 CAPTC_LIQ >  -250000000 ~ "Médio",
+                                 CAPTC_LIQ >= 250000000  & 
+                                 CAPTC_LIQ <   1000000000 ~ "Grande",
+                                 CAPTC_LIQ <= -250000000 & 
+                                 CAPTC_LIQ >  -1000000000 ~ "Grande",
+                                 CAPTC_LIQ >= 1000000000 | 
+                                 CAPTC_LIQ <= -1000000000 ~ "Gigante",
+                                 T ~ "Micro")) |> 
+  mutate(TAMANHO = case_when(TAMANHO == "Grande" & 
+                             TAMANHO_CAP == "Gigante" ~ "Gigante",
+                             TAMANHO == "Médio" & 
+                             TAMANHO_CAP == "Gigante" ~ "Gigante",
+                             TAMANHO == "Médio" & 
+                             TAMANHO_CAP == "Grande" ~ "Grande",
+                             TAMANHO == "Pequeno" & 
+                             TAMANHO_CAP == "Grande" ~ "Grande",
+                             TAMANHO == "Pequeno" & 
+                             TAMANHO_CAP == "Médio" ~ "Médio",
+                             TAMANHO == "Micro" & 
+                             TAMANHO_CAP != "Micro" ~ TAMANHO_CAP,
+                             T ~ TAMANHO)) |> 
+  collect() |> 
+  mutate(TRIMESTRE = as.character(TRIMESTRE)) |> 
+  ungroup() -> dados_painel_acoes_trimestre
+```
+
+#### Manipulação de dados de Fundos Multimercados
+
+```{r message=FALSE,warning=F}
+dados_painel_mm |> 
+  lazy_dt() |> 
+  select(-SEMESTRE,-TRIMESTRE,-MÊS) |> 
+  mutate(ANO = as.character(ANO)) |>
+  group_by(ANO,CNPJ_FUNDO) |> 
+  arrange(DT_COMPTC) |> 
+  summarise(CAPTC_DIA = sum(CAPTC_DIA),
+            RESG_DIA = sum(RESG_DIA),
+            GRUPO = dplyr::last(GRUPO),
+            VL_PATRIM_LIQ = dplyr::first(VL_PATRIM_LIQ),
+            RENTABILIDADE = (dplyr::last(VL_QUOTA)/
+                               dplyr::first(VL_QUOTA))-1,
+            FUNDO_COTAS = dplyr::first(FUNDO_COTAS),
+            PUBLICO_ALVO = dplyr::first(PUBLICO_ALVO),
+            EXISTE_TAXA_PERFM = dplyr::first(EXISTE_TAXA_PERFM),
+            CLASSE_ANBIMA = dplyr::first(CLASSE_ANBIMA),
+            FUNDO_ESPELHO = dplyr::first(FUNDO_ESPELHO),
+            TRIB_LPRAZO = dplyr::first(TRIB_LPRAZO)) |> 
+  mutate(RENTABILIDADE = case_when(RENTABILIDADE == Inf ~ 0,
+                                   T ~ RENTABILIDADE)) |> 
+  mutate(CAPTC_LIQ = CAPTC_DIA-RESG_DIA) |> 
+  mutate(TAMANHO = case_when(VL_PATRIM_LIQ >= 15000000 &
+                             VL_PATRIM_LIQ <  50000000 ~ "Pequeno",
+                             VL_PATRIM_LIQ >= 50000000 &
+                             VL_PATRIM_LIQ <  250000000 ~ "Médio",
+                             VL_PATRIM_LIQ >= 250000000 &
+                             VL_PATRIM_LIQ <  1000000000 ~ "Grande",
+                             VL_PATRIM_LIQ >= 1000000000 ~ "Gigante",
+                             T ~ "Micro")) |> 
+  mutate(TAMANHO_CAP = case_when(CAPTC_LIQ >= 15000000 & 
+                                 CAPTC_LIQ <   50000000 ~ "Pequeno",
+                                 CAPTC_LIQ <= -15000000 & 
+                                 CAPTC_LIQ >  -50000000 ~ "Pequeno",
+                                 CAPTC_LIQ >= 50000000 & 
+                                 CAPTC_LIQ <   250000000 ~ "Médio",
+                                 CAPTC_LIQ <= -50000000  & 
+                                 CAPTC_LIQ >  -250000000 ~ "Médio",
+                                 CAPTC_LIQ >= 250000000  & 
+                                 CAPTC_LIQ <   1000000000 ~ "Grande",
+                                 CAPTC_LIQ <= -250000000 & 
+                                 CAPTC_LIQ >  -1000000000 ~ "Grande",
+                                 CAPTC_LIQ >= 1000000000 | 
+                                 CAPTC_LIQ <= -1000000000 ~ "Gigante",
+                                 T ~ "Micro")) |> 
+  mutate(TAMANHO = case_when(TAMANHO == "Grande" & 
+                             TAMANHO_CAP == "Gigante" ~ "Gigante",
+                             TAMANHO == "Médio" & 
+                             TAMANHO_CAP == "Gigante" ~ "Gigante",
+                             TAMANHO == "Médio" & 
+                             TAMANHO_CAP == "Grande" ~ "Grande",
+                             TAMANHO == "Pequeno" & 
+                             TAMANHO_CAP == "Grande" ~ "Grande",
+                             TAMANHO == "Pequeno" & 
+                             TAMANHO_CAP == "Médio" ~ "Médio",
+                             TAMANHO == "Micro" & 
+                             TAMANHO_CAP != "Micro" ~ TAMANHO_CAP,
+                             T ~ TAMANHO)) |> 
+  collect() |> 
+  ungroup() -> dados_painel_mm_ano
+
+dados_painel_mm |> 
+  lazy_dt() |> 
+  select(-ANO,-TRIMESTRE,-MÊS) |> 
+  group_by(SEMESTRE,CNPJ_FUNDO) |> 
+  arrange(DT_COMPTC) |> 
+  summarise(CAPTC_DIA = sum(CAPTC_DIA),
+            RESG_DIA = sum(RESG_DIA),
+            GRUPO = dplyr::last(GRUPO),
+            VL_PATRIM_LIQ = dplyr::first(VL_PATRIM_LIQ),
+            RENTABILIDADE = (dplyr::last(VL_QUOTA)/
+                               dplyr::first(VL_QUOTA))-1,
+            FUNDO_COTAS = dplyr::first(FUNDO_COTAS),
+            PUBLICO_ALVO = dplyr::first(PUBLICO_ALVO),
+            EXISTE_TAXA_PERFM = dplyr::first(EXISTE_TAXA_PERFM),
+            CLASSE_ANBIMA = dplyr::first(CLASSE_ANBIMA),
+            FUNDO_ESPELHO = dplyr::first(FUNDO_ESPELHO),
+            TRIB_LPRAZO = dplyr::first(TRIB_LPRAZO)) |> 
+  mutate(RENTABILIDADE = case_when(RENTABILIDADE == Inf ~ 0,
+                                   T ~ RENTABILIDADE)) |> 
+  mutate(CAPTC_LIQ = CAPTC_DIA-RESG_DIA) |> 
+  mutate(SEMESTRE = as.character(SEMESTRE)) |> 
+  mutate(TAMANHO = case_when(VL_PATRIM_LIQ >= 15000000 &
+                             VL_PATRIM_LIQ <  50000000 ~ "Pequeno",
+                             VL_PATRIM_LIQ >= 50000000 &
+                             VL_PATRIM_LIQ <  250000000 ~ "Médio",
+                             VL_PATRIM_LIQ >= 250000000 &
+                             VL_PATRIM_LIQ <  1000000000 ~ "Grande",
+                             VL_PATRIM_LIQ >= 1000000000 ~ "Gigante",
+                             T ~ "Micro")) |> 
+  mutate(TAMANHO_CAP = case_when(CAPTC_LIQ >= 15000000 & 
+                                 CAPTC_LIQ <   50000000 ~ "Pequeno",
+                                 CAPTC_LIQ <= -15000000 & 
+                                 CAPTC_LIQ >  -50000000 ~ "Pequeno",
+                                 CAPTC_LIQ >= 50000000 & 
+                                 CAPTC_LIQ <   250000000 ~ "Médio",
+                                 CAPTC_LIQ <= -50000000  & 
+                                 CAPTC_LIQ >  -250000000 ~ "Médio",
+                                 CAPTC_LIQ >= 250000000  & 
+                                 CAPTC_LIQ <   1000000000 ~ "Grande",
+                                 CAPTC_LIQ <= -250000000 & 
+                                 CAPTC_LIQ >  -1000000000 ~ "Grande",
+                                 CAPTC_LIQ >= 1000000000 | 
+                                 CAPTC_LIQ <= -1000000000 ~ "Gigante",
+                                 T ~ "Micro")) |> 
+  mutate(TAMANHO = case_when(TAMANHO == "Grande" & 
+                             TAMANHO_CAP == "Gigante" ~ "Gigante",
+                             TAMANHO == "Médio" & 
+                             TAMANHO_CAP == "Gigante" ~ "Gigante",
+                             TAMANHO == "Médio" & 
+                             TAMANHO_CAP == "Grande" ~ "Grande",
+                             TAMANHO == "Pequeno" & 
+                             TAMANHO_CAP == "Grande" ~ "Grande",
+                             TAMANHO == "Pequeno" & 
+                             TAMANHO_CAP == "Médio" ~ "Médio",
+                             TAMANHO == "Micro" & 
+                             TAMANHO_CAP != "Micro" ~ TAMANHO_CAP,
+                             T ~ TAMANHO)) |> 
+  collect() |> 
+  ungroup() -> dados_painel_mm_semestre
+
+dados_painel_mm |> 
+  lazy_dt() |> 
+  filter(CONDOM == "Aberto") |>
+  select(-SEMESTRE,-ANO,-MÊS) |> 
+  mutate(TRIMESTRE = as.character(TRIMESTRE)) |>
+  group_by(TRIMESTRE,CNPJ_FUNDO) |> 
+  arrange(DT_COMPTC) |> 
+  summarise(CAPTC_DIA = sum(CAPTC_DIA),
+            RESG_DIA = sum(RESG_DIA),
+            GRUPO = dplyr::last(GRUPO),
+            VL_PATRIM_LIQ = dplyr::first(VL_PATRIM_LIQ),
+            RENTABILIDADE = (dplyr::last(VL_QUOTA)/
+                               dplyr::first(VL_QUOTA))-1,
+            FUNDO_COTAS = dplyr::first(FUNDO_COTAS),
+            PUBLICO_ALVO = dplyr::first(PUBLICO_ALVO),
+            EXISTE_TAXA_PERFM = dplyr::first(EXISTE_TAXA_PERFM),
+            CLASSE_ANBIMA = dplyr::first(CLASSE_ANBIMA),
+            FUNDO_ESPELHO = dplyr::first(FUNDO_ESPELHO),
+            TRIB_LPRAZO = dplyr::first(TRIB_LPRAZO)) |> 
+  mutate(RENTABILIDADE = case_when(RENTABILIDADE == Inf ~ 0,
+                                   T ~ RENTABILIDADE)) |> 
+  mutate(CAPTC_LIQ = CAPTC_DIA-RESG_DIA) |> 
+  mutate(TAMANHO = case_when(VL_PATRIM_LIQ >= 15000000 &
+                             VL_PATRIM_LIQ <  50000000 ~ "Pequeno",
+                             VL_PATRIM_LIQ >= 50000000 &
+                             VL_PATRIM_LIQ <  250000000 ~ "Médio",
+                             VL_PATRIM_LIQ >= 250000000 &
+                             VL_PATRIM_LIQ <  1000000000 ~ "Grande",
+                             VL_PATRIM_LIQ >= 1000000000 ~ "Gigante",
+                             T ~ "Micro")) |> 
+  mutate(TAMANHO_CAP = case_when(CAPTC_LIQ >= 15000000 & 
+                                 CAPTC_LIQ <   50000000 ~ "Pequeno",
+                                 CAPTC_LIQ <= -15000000 & 
+                                 CAPTC_LIQ >  -50000000 ~ "Pequeno",
+                                 CAPTC_LIQ >= 50000000 & 
+                                 CAPTC_LIQ <   250000000 ~ "Médio",
+                                 CAPTC_LIQ <= -50000000  & 
+                                 CAPTC_LIQ >  -250000000 ~ "Médio",
+                                 CAPTC_LIQ >= 250000000  & 
+                                 CAPTC_LIQ <   1000000000 ~ "Grande",
+                                 CAPTC_LIQ <= -250000000 & 
+                                 CAPTC_LIQ >  -1000000000 ~ "Grande",
+                                 CAPTC_LIQ >= 1000000000 | 
+                                 CAPTC_LIQ <= -1000000000 ~ "Gigante",
+                                 T ~ "Micro")) |> 
+  mutate(TAMANHO = case_when(TAMANHO == "Grande" & 
+                             TAMANHO_CAP == "Gigante" ~ "Gigante",
+                             TAMANHO == "Médio" & 
+                             TAMANHO_CAP == "Gigante" ~ "Gigante",
+                             TAMANHO == "Médio" & 
+                             TAMANHO_CAP == "Grande" ~ "Grande",
+                             TAMANHO == "Pequeno" & 
+                             TAMANHO_CAP == "Grande" ~ "Grande",
+                             TAMANHO == "Pequeno" & 
+                             TAMANHO_CAP == "Médio" ~ "Médio",
+                             TAMANHO == "Micro" & 
+                             TAMANHO_CAP != "Micro" ~ TAMANHO_CAP,
+                             T ~ TAMANHO)) |> 
+  collect() |> 
+  ungroup() -> dados_painel_mm_trimestre
+```
+
+#### Manipulação de dados fundos de Renda Fixa
+
+```{r message=FALSE,warning=F}
+dados_painel_rf |> 
+  lazy_dt() |> 
+  select(-SEMESTRE,-TRIMESTRE,-MÊS) |> 
+  mutate(ANO = as.character(ANO)) |>
+  group_by(ANO,CNPJ_FUNDO) |> 
+  arrange(DT_COMPTC) |> 
+  summarise(CAPTC_DIA = sum(CAPTC_DIA),
+            RESG_DIA = sum(RESG_DIA),
+            GRUPO = dplyr::last(GRUPO),
+            VL_PATRIM_LIQ = dplyr::first(VL_PATRIM_LIQ),
+            RENTABILIDADE = (dplyr::last(VL_QUOTA)/
+                               dplyr::first(VL_QUOTA))-1,
+            FUNDO_COTAS = dplyr::first(FUNDO_COTAS),
+            PUBLICO_ALVO = dplyr::first(PUBLICO_ALVO),
+            EXISTE_TAXA_PERFM = dplyr::first(EXISTE_TAXA_PERFM),
+            CLASSE_ANBIMA = dplyr::first(CLASSE_ANBIMA),
+            FUNDO_ESPELHO = dplyr::first(FUNDO_ESPELHO),
+            TRIB_LPRAZO = dplyr::first(TRIB_LPRAZO)) |> 
+  mutate(RENTABILIDADE = case_when(RENTABILIDADE == Inf ~ 0,
+                                   T ~ RENTABILIDADE)) |> 
+  mutate(CAPTC_LIQ = CAPTC_DIA-RESG_DIA) |> 
+  mutate(TAMANHO = case_when(VL_PATRIM_LIQ >= 15000000 &
+                             VL_PATRIM_LIQ <  50000000 ~ "Pequeno",
+                             VL_PATRIM_LIQ >= 50000000 &
+                             VL_PATRIM_LIQ <  250000000 ~ "Médio",
+                             VL_PATRIM_LIQ >= 250000000 &
+                             VL_PATRIM_LIQ <  1000000000 ~ "Grande",
+                             VL_PATRIM_LIQ >= 1000000000 ~ "Gigante",
+                             T ~ "Micro")) |> 
+  mutate(TAMANHO_CAP = case_when(CAPTC_LIQ >= 15000000 & 
+                                 CAPTC_LIQ <   50000000 ~ "Pequeno",
+                                 CAPTC_LIQ <= -15000000 & 
+                                 CAPTC_LIQ >  -50000000 ~ "Pequeno",
+                                 CAPTC_LIQ >= 50000000 & 
+                                 CAPTC_LIQ <   250000000 ~ "Médio",
+                                 CAPTC_LIQ <= -50000000  & 
+                                 CAPTC_LIQ >  -250000000 ~ "Médio",
+                                 CAPTC_LIQ >= 250000000  & 
+                                 CAPTC_LIQ <   1000000000 ~ "Grande",
+                                 CAPTC_LIQ <= -250000000 & 
+                                 CAPTC_LIQ >  -1000000000 ~ "Grande",
+                                 CAPTC_LIQ >= 1000000000 | 
+                                 CAPTC_LIQ <= -1000000000 ~ "Gigante",
+                                 T ~ "Micro")) |> 
+  mutate(TAMANHO = case_when(TAMANHO == "Grande" & 
+                             TAMANHO_CAP == "Gigante" ~ "Gigante",
+                             TAMANHO == "Médio" & 
+                             TAMANHO_CAP == "Gigante" ~ "Gigante",
+                             TAMANHO == "Médio" & 
+                             TAMANHO_CAP == "Grande" ~ "Grande",
+                             TAMANHO == "Pequeno" & 
+                             TAMANHO_CAP == "Grande" ~ "Grande",
+                             TAMANHO == "Pequeno" & 
+                             TAMANHO_CAP == "Médio" ~ "Médio",
+                             TAMANHO == "Micro" & 
+                             TAMANHO_CAP != "Micro" ~ TAMANHO_CAP,
+                             T ~ TAMANHO)) |> 
+  collect() |> 
+  ungroup() -> dados_painel_rf_ano
+
+dados_painel_rf |> 
+  lazy_dt() |> 
+  select(-ANO,-TRIMESTRE,-MÊS) |> 
+  group_by(SEMESTRE,CNPJ_FUNDO) |> 
+  arrange(DT_COMPTC) |> 
+  summarise(CAPTC_DIA = sum(CAPTC_DIA),
+            RESG_DIA = sum(RESG_DIA),
+            GRUPO = dplyr::last(GRUPO),
+            VL_PATRIM_LIQ = dplyr::first(VL_PATRIM_LIQ),
+            RENTABILIDADE = (dplyr::last(VL_QUOTA)/
+                               dplyr::first(VL_QUOTA))-1,
+            FUNDO_COTAS = dplyr::first(FUNDO_COTAS),
+            PUBLICO_ALVO = dplyr::first(PUBLICO_ALVO),
+            EXISTE_TAXA_PERFM = dplyr::first(EXISTE_TAXA_PERFM),
+            CLASSE_ANBIMA = dplyr::first(CLASSE_ANBIMA),
+            FUNDO_ESPELHO = dplyr::first(FUNDO_ESPELHO),
+            TRIB_LPRAZO = dplyr::first(TRIB_LPRAZO)) |> 
+  mutate(RENTABILIDADE = case_when(RENTABILIDADE == Inf ~ 0,
+                                   T ~ RENTABILIDADE)) |> 
+  mutate(CAPTC_LIQ = CAPTC_DIA-RESG_DIA) |> 
+  mutate(SEMESTRE = as.character(SEMESTRE)) |> 
+  mutate(TAMANHO = case_when(VL_PATRIM_LIQ >= 15000000 &
+                             VL_PATRIM_LIQ <  50000000 ~ "Pequeno",
+                             VL_PATRIM_LIQ >= 50000000 &
+                             VL_PATRIM_LIQ <  250000000 ~ "Médio",
+                             VL_PATRIM_LIQ >= 250000000 &
+                             VL_PATRIM_LIQ <  1000000000 ~ "Grande",
+                             VL_PATRIM_LIQ >= 1000000000 ~ "Gigante",
+                             T ~ "Micro")) |> 
+  mutate(TAMANHO_CAP = case_when(CAPTC_LIQ >= 15000000 & 
+                                 CAPTC_LIQ <   50000000 ~ "Pequeno",
+                                 CAPTC_LIQ <= -15000000 & 
+                                 CAPTC_LIQ >  -50000000 ~ "Pequeno",
+                                 CAPTC_LIQ >= 50000000 & 
+                                 CAPTC_LIQ <   250000000 ~ "Médio",
+                                 CAPTC_LIQ <= -50000000  & 
+                                 CAPTC_LIQ >  -250000000 ~ "Médio",
+                                 CAPTC_LIQ >= 250000000  & 
+                                 CAPTC_LIQ <   1000000000 ~ "Grande",
+                                 CAPTC_LIQ <= -250000000 & 
+                                 CAPTC_LIQ >  -1000000000 ~ "Grande",
+                                 CAPTC_LIQ >= 1000000000 | 
+                                 CAPTC_LIQ <= -1000000000 ~ "Gigante",
+                                 T ~ "Micro")) |> 
+  mutate(TAMANHO = case_when(TAMANHO == "Grande" & 
+                             TAMANHO_CAP == "Gigante" ~ "Gigante",
+                             TAMANHO == "Médio" & 
+                             TAMANHO_CAP == "Gigante" ~ "Gigante",
+                             TAMANHO == "Médio" & 
+                             TAMANHO_CAP == "Grande" ~ "Grande",
+                             TAMANHO == "Pequeno" & 
+                             TAMANHO_CAP == "Grande" ~ "Grande",
+                             TAMANHO == "Pequeno" & 
+                             TAMANHO_CAP == "Médio" ~ "Médio",
+                             TAMANHO == "Micro" & 
+                             TAMANHO_CAP != "Micro" ~ TAMANHO_CAP,
+                             T ~ TAMANHO)) |> 
+  collect() |> 
+  ungroup() -> dados_painel_rf_semestre
+
+dados_painel_rf |> 
+  lazy_dt() |> 
+  select(-SEMESTRE,-ANO,-MÊS) |> 
+  mutate(TRIMESTRE = as.character(TRIMESTRE)) |>
+  group_by(TRIMESTRE,CNPJ_FUNDO) |> 
+  arrange(DT_COMPTC) |> 
+  summarise(CAPTC_DIA = sum(CAPTC_DIA),
+            RESG_DIA = sum(RESG_DIA),
+            GRUPO = dplyr::last(GRUPO),
+            VL_PATRIM_LIQ = dplyr::first(VL_PATRIM_LIQ),
+            RENTABILIDADE = (dplyr::last(VL_QUOTA)/
+                               dplyr::first(VL_QUOTA))-1,
+            FUNDO_COTAS = dplyr::first(FUNDO_COTAS),
+            PUBLICO_ALVO = dplyr::first(PUBLICO_ALVO),
+            EXISTE_TAXA_PERFM = dplyr::first(EXISTE_TAXA_PERFM),
+            CLASSE_ANBIMA = dplyr::first(CLASSE_ANBIMA),
+            FUNDO_ESPELHO = dplyr::first(FUNDO_ESPELHO),
+            TRIB_LPRAZO = dplyr::first(TRIB_LPRAZO)) |> 
+  mutate(RENTABILIDADE = case_when(RENTABILIDADE == Inf ~ 0,
+                                   T ~ RENTABILIDADE)) |> 
+  mutate(CAPTC_LIQ = CAPTC_DIA-RESG_DIA) |> 
+  mutate(TAMANHO = case_when(VL_PATRIM_LIQ >= 15000000 &
+                             VL_PATRIM_LIQ <  50000000 ~ "Pequeno",
+                             VL_PATRIM_LIQ >= 50000000 &
+                             VL_PATRIM_LIQ <  250000000 ~ "Médio",
+                             VL_PATRIM_LIQ >= 250000000 &
+                             VL_PATRIM_LIQ <  1000000000 ~ "Grande",
+                             VL_PATRIM_LIQ >= 1000000000 ~ "Gigante",
+                             T ~ "Micro")) |> 
+  mutate(TAMANHO_CAP = case_when(CAPTC_LIQ >= 15000000 & 
+                                 CAPTC_LIQ <   50000000 ~ "Pequeno",
+                                 CAPTC_LIQ <= -15000000 & 
+                                 CAPTC_LIQ >  -50000000 ~ "Pequeno",
+                                 CAPTC_LIQ >= 50000000 & 
+                                 CAPTC_LIQ <   250000000 ~ "Médio",
+                                 CAPTC_LIQ <= -50000000  & 
+                                 CAPTC_LIQ >  -250000000 ~ "Médio",
+                                 CAPTC_LIQ >= 250000000  & 
+                                 CAPTC_LIQ <   1000000000 ~ "Grande",
+                                 CAPTC_LIQ <= -250000000 & 
+                                 CAPTC_LIQ >  -1000000000 ~ "Grande",
+                                 CAPTC_LIQ >= 1000000000 | 
+                                 CAPTC_LIQ <= -1000000000 ~ "Gigante",
+                                 T ~ "Micro")) |> 
+  mutate(TAMANHO = case_when(TAMANHO == "Grande" & 
+                             TAMANHO_CAP == "Gigante" ~ "Gigante",
+                             TAMANHO == "Médio" & 
+                             TAMANHO_CAP == "Gigante" ~ "Gigante",
+                             TAMANHO == "Médio" & 
+                             TAMANHO_CAP == "Grande" ~ "Grande",
+                             TAMANHO == "Pequeno" & 
+                             TAMANHO_CAP == "Grande" ~ "Grande",
+                             TAMANHO == "Pequeno" & 
+                             TAMANHO_CAP == "Médio" ~ "Médio",
+                             TAMANHO == "Micro" & 
+                             TAMANHO_CAP != "Micro" ~ TAMANHO_CAP,
+                             T ~ TAMANHO)) |> 
+  collect() |> 
+  ungroup() -> dados_painel_rf_trimestre
+```
+
+### Tratamento das Variáveis Econômicas
+
+#### Dados Macro Período Anual
+
+```{r message=FALSE,warning=F}
+pin_read(board,"dolar") |> 
+  group_by(ANO) |> 
+  arrange(DT_COMPTC) |> 
+  summarise(`VAR ANUAL(%) Dólar` = (dplyr::last(USDBRL)/
+                                dplyr::first(USDBRL))-1,
+            USDBRL = dplyr::last(USDBRL)) -> dolar_anual
+
+pin_read(board,"IBOV") |> 
+  arrange(COMPETENCIA) |> 
+  distinct_all() |> 
+  mutate(ANO = lubridate::year(zoo::as.Date(COMPETENCIA))) |>
+  group_by(ANO) |>
+  summarise(`VAR ANUAL(%) IBOV` = (dplyr::last(IBOV)/
+                                dplyr::first(IBOV))-1,
+            IBOV = dplyr::last(IBOV)) -> ibov_anual
+
+pin_read(board,"IPCA") |> 
+  filter(ANO > 2004) |> 
+  group_by(ANO) |> 
+  arrange(DT_COMPTC) |> 
+  summarise(`VAR ANUAL(%) IPCA` = (dplyr::last(IPCA)/
+                                dplyr::first(IPCA))-1,
+            IPCA = dplyr::last(IPCA)) -> ipca_anual
+
+
+pin_read(board,"expectativa_inflacao_12M") |> 
+  filter(ANO > 2004) |> 
+  group_by(ANO) |> 
+  arrange(DT_COMPTC) |> 
+  summarise(`VAR ANUAL(%) Expectativa IPCA` = (dplyr::last(Mediana)/
+                                                 dplyr::first(Mediana))-1,
+            `Expectativa IPCA 12M` = dplyr::last(Mediana)) -> expectativa_ipca_12M_anual
+
+pin_read(board,"selic") |> 
+  group_by(ANO) |> 
+  arrange(DT_COMPTC) |> 
+  summarise(`VAR ANUAL(%) SELIC` = (dplyr::last(SELIC)/
+                                                 dplyr::first(SELIC))-1,
+            `SELIC` = dplyr::last(SELIC)) -> selic_anual
+
+pin_read(board,"expectativa_selic") |> 
+  filter(str_detect(Reuniao,"R8")) |> 
+  mutate(ANO = lubridate::year(Data)) |> 
+  group_by(ANO) |> 
+  arrange(Data) |> 
+  summarise_all(dplyr::last) |> 
+  select(ANO,Mediana) |> 
+  mutate(`VAR ANUAL(%) Expec.SELIC` = (Mediana/
+                                         dplyr::lag(Mediana))-1) |> 
+  rename(`Expec.SELIC` = Mediana) -> expectativa_selic_anual
+
+pin_read(board,"expectativa_cambio") |> 
+  filter(str_detect(DataReferencia,"12/")) |>
+  mutate(ANO = lubridate::year(Data)) |> 
+  filter(ANO > 2004) |> 
+  group_by(ANO) |> 
+  arrange(Data) |> 
+  summarise_all(dplyr::last) |> 
+  select(ANO,Mediana) |> 
+  mutate(`VAR ANUAL(%) Expec.CAMBIO` = (Mediana/
+                                         dplyr::lag(Mediana))-1) |> 
+  rename(`Expec.CAMBIO` = Mediana) -> expectativa_cambio_anual
+
+pin_read(board,"IBC_BR") |> 
+  group_by(ANO) |> 
+  arrange(DT_COMPTC) |> 
+  summarise(`VAR ANUAL(%) IBC-Br` = (dplyr::last(`IBC-Br`)/
+                                dplyr::first(`IBC-Br`))-1,
+            `IBC-Br` = dplyr::last(`IBC-Br`)) -> ibc_br_anual
+
+dolar_anual |> 
+  left_join(ibov_anual) |> 
+  left_join(ipca_anual) |> 
+  left_join(expectativa_ipca_12M_anual) |> 
+  left_join(selic_anual) |> 
+  left_join(expectativa_selic_anual) |>
+  left_join(expectativa_cambio_anual) |> 
+  left_join(ibc_br_anual) |> 
+  filter(ANO > 2004) |> 
+  mutate(ANO = as.character(ANO)) -> variaveis_macro_anual
+```
+
+#### Dados macro Período Semestral
+
+```{r message=FALSE,warning=F}
+pin_read(board,"dolar") |> 
+  group_by(SEMESTRE) |> 
+  arrange(DT_COMPTC) |> 
+  summarise(`VAR SEMESTRAL(%) Dólar` = (dplyr::last(USDBRL)/
+                                dplyr::first(USDBRL))-1,
+            USDBRL = dplyr::last(USDBRL)) -> dolar_semestral
+
+pin_read(board,"IBOV") |> 
+    arrange(COMPETENCIA) |> 
+    distinct_all() |> 
+    mutate(ANO = lubridate::year(zoo::as.Date(COMPETENCIA))) |>
+    mutate(SEMESTRE = paste0(ANO," S",lubridate::semester(zoo::as.Date(COMPETENCIA)))) |> 
+    group_by(SEMESTRE) |>
+    summarise(`VAR SEMESTRAL(%) IBOV` = (dplyr::last(IBOV)/
+                                             dplyr::first(IBOV))-1,
+              IBOV = dplyr::last(IBOV)) -> ibov_semestral
+
+pin_read(board,"IPCA") |> 
+  filter(ANO > 2004) |> 
+  group_by(SEMESTRE) |> 
+  arrange(DT_COMPTC) |> 
+  summarise(`VAR SEMESTRAL(%) IPCA` = (dplyr::last(IPCA)/
+                                dplyr::first(IPCA))-1,
+            IPCA = dplyr::last(IPCA)) -> ipca_semestral
+
+
+pin_read(board,"expectativa_inflacao_12M") |> 
+  filter(ANO > 2004) |> 
+  group_by(SEMESTRE) |> 
+  arrange(DT_COMPTC) |> 
+  summarise(`VAR SEMESTRAL(%) Expectativa IPCA` = (dplyr::last(Mediana)/dplyr::first(Mediana))-1,
+            `Expectativa IPCA 12M` = dplyr::last(Mediana)) -> expectativa_ipca_12M_semestral
+
+pin_read(board,"selic") |> 
+  group_by(SEMESTRE) |> 
+  arrange(DT_COMPTC) |> 
+  summarise(`VAR SEMESTRAL(%) SELIC` = (dplyr::last(SELIC)/
+                                                 dplyr::first(SELIC))-1,
+            `SELIC` = dplyr::last(SELIC)) -> selic_semestral
+
+pin_read(board,"expectativa_selic") |> 
+  filter(str_detect(Reuniao,"R8")) |> 
+  mutate(ANO = lubridate::year(Data)) |> 
+  mutate(SEMESTRE = paste0(ANO," S",lubridate::semester(Data))) |>
+  group_by(SEMESTRE) |> 
+  arrange(Data) |> 
+  summarise_all(dplyr::last) |> 
+  select(SEMESTRE,Mediana) |> 
+  mutate(`VAR SEMESTRAL(%) Expec.SELIC` = (Mediana/
+                                         dplyr::lag(Mediana))-1) |> 
+  rename(`Expec.SELIC` = Mediana) -> expectativa_selic_semestral
+
+pin_read(board,"expectativa_cambio") |> 
+  filter(str_detect(DataReferencia,"12/")) |>
+  mutate(ANO = lubridate::year(Data)) |> 
+  mutate(SEMESTRE = paste0(ANO," S",lubridate::semester(Data))) |>
+  filter(ANO > 2004) |> 
+  group_by(SEMESTRE) |> 
+  arrange(Data) |> 
+  summarise_all(dplyr::last) |> 
+  select(SEMESTRE,Mediana) |> 
+  mutate(`VAR SEMESTRAL(%) Expec.CAMBIO` = (Mediana/
+                                         dplyr::lag(Mediana))-1) |> 
+  rename(`Expec.CAMBIO` = Mediana) -> expectativa_cambio_semestral
+
+pin_read(board,"IBC_BR") |> 
+  group_by(SEMESTRE) |> 
+  arrange(DT_COMPTC) |> 
+  summarise(`VAR ANUAL(%) IBC-Br` = (dplyr::last(`IBC-Br`)/
+                                dplyr::first(`IBC-Br`))-1,
+            `IBC-Br` = dplyr::last(`IBC-Br`)) -> ibc_br_semestral
+
+dolar_semestral |> 
+  left_join(ibov_semestral) |> 
+  left_join(ipca_semestral) |> 
+  left_join(expectativa_ipca_12M_semestral) |> 
+  left_join(selic_semestral) |> 
+  left_join(expectativa_selic_semestral) |>
+  left_join(expectativa_cambio_semestral) |> 
+  left_join(ibc_br_semestral) |>
+  mutate(SEMESTRE = as.character(SEMESTRE)) -> variaveis_macro_semestral
+```
+
+#### Dados macro Período Trimestral
+
+```{r message=FALSE,warning=F}
+pin_read(board,"dolar") |> 
+  group_by(TRIMESTRE) |> 
+  arrange(DT_COMPTC) |> 
+  summarise(`VAR TRIMESTRAL(%) Dólar` = (dplyr::last(USDBRL)/
+                                dplyr::first(USDBRL))-1,
+            USDBRL = dplyr::last(USDBRL)) -> dolar_trimestral
+
+pin_read(board,"IBOV") |> 
+    arrange(COMPETENCIA) |> 
+    distinct_all() |> 
+    mutate(TRIMESTRE = yearquarter(zoo::as.Date(COMPETENCIA))) |> 
+    group_by(TRIMESTRE) |>
+    summarise(`VAR TRIMESTRAL(%) IBOV` = (dplyr::last(IBOV)/
+                                             dplyr::first(IBOV))-1,
+              IBOV = dplyr::last(IBOV)) -> ibov_trimestral
+
+pin_read(board,"IPCA") |> 
+  filter(ANO > 2004) |> 
+  group_by(TRIMESTRE) |> 
+  arrange(DT_COMPTC) |> 
+  summarise(`VAR TRIMESTRAL(%) IPCA` = (dplyr::last(IPCA)/
+                                dplyr::first(IPCA))-1,
+            IPCA = dplyr::last(IPCA)) -> ipca_trimestral
+
+
+pin_read(board,"expectativa_inflacao_12M") |> 
+  filter(ANO > 2004) |> 
+  group_by(TRIMESTRE) |> 
+  arrange(DT_COMPTC) |> 
+  summarise(`VAR TRIMESTRAL(%) Expectativa IPCA` = (dplyr::last(Mediana)/dplyr::first(Mediana))-1,
+            `Expectativa IPCA 12M` = dplyr::last(Mediana)) -> expectativa_ipca_12M_trimestral
+
+pin_read(board,"selic") |> 
+  group_by(TRIMESTRE) |> 
+  arrange(DT_COMPTC) |> 
+  summarise(`VAR TRIMESTRAL(%) SELIC` = (dplyr::last(SELIC)/
+                                                 dplyr::first(SELIC))-1,
+            `SELIC` = dplyr::last(SELIC)) -> selic_trimestral
+
+pin_read(board,"expectativa_selic") |> 
+  filter(str_detect(Reuniao,"R8")) |> 
+  mutate(TRIMESTRE = yearquarter(Data)) |> 
+  group_by(TRIMESTRE) |> 
+  arrange(Data) |> 
+  summarise_all(dplyr::last) |> 
+  select(TRIMESTRE,Mediana) |> 
+  mutate(`VAR TRIMESTRAL(%) Expec.SELIC` = (Mediana/
+                                         dplyr::lag(Mediana))-1) |> 
+  rename(`Expec.SELIC` = Mediana) -> expectativa_selic_trimestral
+
+pin_read(board,"expectativa_cambio") |> 
+  filter(str_detect(DataReferencia,"12/")) |>
+  mutate(TRIMESTRE = yearquarter(Data)) |>   
+  group_by(TRIMESTRE) |> 
+  arrange(Data) |> 
+  summarise_all(dplyr::last) |> 
+  select(TRIMESTRE,Mediana) |> 
+  mutate(`VAR TRIMESTRAL(%) Expec.CAMBIO` = (Mediana/
+                                         dplyr::lag(Mediana))-1) |> 
+  rename(`Expec.CAMBIO` = Mediana) -> expectativa_cambio_trimestral
+
+pin_read(board,"IBC_BR") |> 
+  group_by(TRIMESTRE) |> 
+  arrange(DT_COMPTC) |> 
+  summarise(`VAR TRIMESTRAL(%) IBC-Br` = (dplyr::last(`IBC-Br`)/
+                                dplyr::first(`IBC-Br`))-1,
+            `IBC-Br` = dplyr::last(`IBC-Br`)) -> ibc_br_trimestral
+
+dolar_trimestral |> 
+  left_join(ibov_trimestral) |> 
+  left_join(ipca_trimestral) |> 
+  left_join(expectativa_ipca_12M_trimestral) |> 
+  left_join(selic_trimestral) |> 
+  left_join(expectativa_selic_trimestral) |>
+  left_join(expectativa_cambio_trimestral) |> 
+  left_join(ibc_br_trimestral) |> 
+  mutate(TRIMESTRE = as.character(TRIMESTRE)) -> variaveis_macro_trimestral
+```
+
+#### Junção das bases
+
+```{r message=FALSE,warning=F}
+
+## Ano ##
+
+dados_painel_acoes_ano |> 
+  left_join(variaveis_macro_anual) -> dados_painel_acoes_ano
+
+dados_painel_mm_ano |> 
+  left_join(variaveis_macro_anual) -> dados_painel_mm_ano
+
+dados_painel_rf_ano |> 
+  left_join(variaveis_macro_anual) -> dados_painel_rf_ano
+
+## Semestre ##
+
+dados_painel_acoes_semestre |> 
+  left_join(variaveis_macro_semestral) -> dados_painel_acoes_semestre
+
+dados_painel_mm_semestre |> 
+  left_join(variaveis_macro_semestral) -> dados_painel_mm_semestre
+
+dados_painel_rf_semestre |> 
+  left_join(variaveis_macro_semestral) -> dados_painel_rf_semestre
+
+## Trimestre ##
+
+dados_painel_acoes_trimestre |> 
+  left_join(variaveis_macro_trimestral) -> dados_painel_acoes_trimestre
+
+dados_painel_mm_trimestre |> 
+  left_join(variaveis_macro_trimestral) -> dados_painel_mm_trimestre
+
+dados_painel_rf_trimestre |> 
+  left_join(variaveis_macro_trimestral) -> dados_painel_rf_trimestre
+
+
 ```

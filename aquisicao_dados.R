@@ -3,7 +3,14 @@ source("global.R")
 
 ###### Expactativas de Inflação 12 meses ######
 
-expectativa_inflacao_12M <- rbcb::get_market_expectations("inflation-12-months", "IPCA", end_date = "2021-12-31") 
+expectativa_inflacao_12M <- rbcb::get_market_expectations("inflation-12-months", "IPCA", 
+                                                          end_date = "2021-12-31")  |> 
+  select(Data,Mediana) |> 
+  rename(DT_COMPTC = Data) |> 
+  mutate(MÊS = yearmonth(DT_COMPTC)) |> 
+  mutate(ANO = lubridate::year(DT_COMPTC)) |> 
+  mutate(TRIMESTRE = yearquarter(DT_COMPTC)) |> 
+  mutate(SEMESTRE = paste0(ANO," S",lubridate::semester(DT_COMPTC)))
 
 
 pin_write(board,
@@ -25,27 +32,41 @@ pin_write(board,
           type = "qs")
 
 di1_futures <- df |> 
-  filter(refdate > "2007-01-01") |> 
+  lazy_dt() |> 
+  filter(refdate > "2005-01-01") |> 
   filter(commodity == "DI1") |>
-  mutate(
-    maturity_date = maturity2date(maturity_code),
-    fixing = following(maturity_date, "Brazil/ANBIMA"),
-    business_days = bizdays(refdate, maturity_date, "Brazil/ANBIMA"),
-    adjusted_tax = (100000 / price) ^ (252 / business_days) - 1
-  ) |>
-  filter(business_days > 0)
+  mutate(maturity_code = str_replace(maturity_code,"JAN","F")) |>
+  mutate(maturity_code = str_replace(maturity_code,"FEV","G")) |>
+  mutate(maturity_code = str_replace(maturity_code,"MAR","H")) |>
+  mutate(maturity_code = str_replace(maturity_code,"ABR","J")) |>
+  mutate(maturity_code = str_replace(maturity_code,"MAI","K")) |>
+  mutate(maturity_code = str_replace(maturity_code,"JUN","M")) |>
+  mutate(maturity_code = str_replace(maturity_code,"JUL","N")) |>
+  mutate(maturity_code = str_replace(maturity_code,"AGO","Q")) |>
+  mutate(maturity_code = str_replace(maturity_code,"SET","U")) |>
+  mutate(maturity_code = str_replace(maturity_code,"OUT","V")) |>
+  mutate(maturity_code = str_replace(maturity_code,"NOV","X")) |>
+  mutate(maturity_code = str_replace(maturity_code,"DEZ","Z")) |>
+  mutate(maturity_code = str_replace(maturity_code,"(?<=[:alpha:])\\d{1,1}$",
+                                     paste0("0",
+                                            str_extract(maturity_code,"\\d")))) |> 
+  mutate(maturity_code = str_replace(maturity_code,"00","10")) |> 
+  filter(str_detect(maturity_code,"F")) |> 
+  mutate(maturity_date = maturity2date(maturity_code)) |>
+  mutate(fixing = following(maturity_date, "Brazil/ANBIMA"),
+         business_days = bizdays(refdate, maturity_date, "Brazil/ANBIMA"),
+         adjusted_tax = (100000 / price) ^ (252 / business_days) - 1) |> 
+  collect()
 
 di1_futures |> 
   filter(str_detect(maturity_code,"F")) |> 
-  select(refdate,symbol,adjusted_tax) |> 
+  select(refdate,maturity_code,adjusted_tax) |> 
   group_by(refdate) |> 
   tidyr::nest() |> 
   mutate(data = lapply(data,function(df) tidyr::pivot_wider(df,
-                                                            names_from = symbol,
+                                                            names_from = maturity_code,
                                                             values_from = adjusted_tax))) |> 
-  mutate(data = purrr::map(data,function(df) df %>% mutate(Abertura_Curva5A = .[[6]]-.[[1]],
-                                                           Abertura_Curva10A = tryCatch({.[[11]]-.[[1]]},
-                                                                                        error = function(e) NA)))) |> 
+  mutate(data = purrr::map(data,function(df) df %>% mutate(Abertura_Curva5A = .[[6]]-.[[1]]))) |> 
   tidyr::unnest(data) |> 
   select(-starts_with("DI1")) -> Aberturas_Curva
 
@@ -70,7 +91,13 @@ pin_write(board,
 
 ##### Câmbio ########
 
-dolar <- rbcb::get_series(c(USDBRL = 1))
+dolar <- rbcb::get_series(c(USDBRL = 1)) |> 
+  rename(DT_COMPTC = date) |> 
+  mutate(MÊS = yearmonth(DT_COMPTC)) |> 
+  mutate(ANO = lubridate::year(DT_COMPTC)) |> 
+  mutate(TRIMESTRE = yearquarter(DT_COMPTC)) |> 
+  mutate(SEMESTRE = paste0(ANO," S",lubridate::semester(DT_COMPTC))) |>
+  filter(ANO >= 2004)
 
 pin_write(board,
           dolar,
@@ -78,7 +105,14 @@ pin_write(board,
           type = "qs")
 
 ####### Selic #######
-rbcb::get_series(432) -> selic
+selic <- rbcb::get_series(432) |> 
+  rename(SELIC = `432`) |> 
+  rename(DT_COMPTC = date) |> 
+  mutate(MÊS = yearmonth(DT_COMPTC)) |> 
+  mutate(ANO = lubridate::year(DT_COMPTC)) |> 
+  mutate(TRIMESTRE = yearquarter(DT_COMPTC)) |> 
+  mutate(SEMESTRE = paste0(ANO," S",lubridate::semester(DT_COMPTC))) |>
+  filter(ANO >= 2004)
 
 
 pin_write(board,
@@ -118,11 +152,18 @@ pin_write(board,
 
 ########### IPCA #############
 
-rbcb::get_series(16122) -> IPCA
+IPCA <- rbcb::get_series(13522) |> 
+  rename(IPCA = `13522`) |> 
+  rename(DT_COMPTC = date) |> 
+  mutate(MÊS = yearmonth(DT_COMPTC)) |> 
+  mutate(ANO = lubridate::year(DT_COMPTC)) |> 
+  mutate(TRIMESTRE = yearquarter(DT_COMPTC)) |> 
+  mutate(SEMESTRE = paste0(ANO," S",lubridate::semester(DT_COMPTC)))
 
 pin_write(board,
           IPCA,
-          "IPCA")
+          "IPCA",
+          type = "qs")
 
 ############## DADOS BALANCETES #################
 plan(multisession, workers = 6)
@@ -169,8 +210,9 @@ pin_write(board,taxa_performance_fundos,"taxa_performance_fundos")
 
 ############ INFORME DIARIO #######################
 
-anos_download <- unique(format(seq(as.Date("2015-01-01"),as.Date("2020-12-31"),by = "month"),"%Y"))
+anos_download <- unique(format(seq(as.Date("2005-01-01"),as.Date("2020-12-31"),by = "month"),"%Y"))
 meses_download <- format(seq(as.Date("2021-01-01"),as.Date("2021-06-01"),by = "month"),"%Y%m")
+
 
 future_map(anos_download, function(ano){
   url <- paste0("https://dados.cvm.gov.br/dados/FI/DOC/INF_DIARIO/DADOS/HIST/inf_diario_fi_",ano,".zip")
