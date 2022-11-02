@@ -10,6 +10,7 @@ library(furrr)
 library(stringr)
 library(tsibble)
 library(ggplot2)
+library(plm) 
 
 board <- board_folder("dados_tese/",versioned = T)
 

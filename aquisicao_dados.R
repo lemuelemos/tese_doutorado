@@ -172,10 +172,18 @@ plan(multisession, workers = 6)
 meses_download <- format(seq(as.Date("2015-01-01"),as.Date("2021-06-01"),by = "month"),"%Y%m")
 
 future_map(meses_download, function(mes){
-  url <- paste0("https://dados.cvm.gov.br/dados/FI/DOC/BALANCETE/DADOS/balancete_fi_",mes,".zip")
-  destfile <- paste0("./balancetes/",mes,".zip")
-  download.file(url,destfile)
+  tryCatch({
+    url <- paste0("https://dados.cvm.gov.br/dados/FI/DOC/BALANCETE/DADOS/balancete_fi_",mes,".zip")
+    destfile <- paste0("./balancetes/",mes,".zip")
+    download.file(url,destfile)
+  }, error = function(e){
+    url <- paste0("https://dados.cvm.gov.br/dados/FI/DOC/BALANCETE/DADOS/balancete_fi_",mes,".zip")
+    destfile <- paste0("./balancetes/",mes,".zip")
+    download.file(url,destfile)
+  })
 })
+
+
 
 
 zipfiles <- list.files("./balancetes/",full.names = T)
@@ -285,7 +293,45 @@ cad_fi <- read_delim("extrato/cad_fi.csv",
 pin_write(board,cad_fi,"cad_fi",type = "rds")
 
 
+############## IMAS ############################
 
+rbcb::get_series(12461) |> 
+  rename(IRF_M = `12461`) |> 
+  rename(DT_COMPTC = date) |> 
+  mutate(MÊS = yearmonth(DT_COMPTC)) |> 
+  mutate(ANO = lubridate::year(DT_COMPTC)) |> 
+  mutate(TRIMESTRE = yearquarter(DT_COMPTC)) |> 
+  mutate(SEMESTRE = paste0(ANO," S",lubridate::semester(DT_COMPTC))) -> IRF_M
 
+rbcb::get_series(12462) |> 
+  rename(IMA_S = `12462`) |> 
+  rename(DT_COMPTC = date) |> 
+  mutate(MÊS = yearmonth(DT_COMPTC)) |> 
+  mutate(ANO = lubridate::year(DT_COMPTC)) |> 
+  mutate(TRIMESTRE = yearquarter(DT_COMPTC)) |> 
+  mutate(SEMESTRE = paste0(ANO," S",lubridate::semester(DT_COMPTC))) -> IMA_S
+
+rbcb::get_series(12466) |> 
+  rename(IMA_B = `12466`) |> 
+  rename(DT_COMPTC = date) |> 
+  mutate(MÊS = yearmonth(DT_COMPTC)) |> 
+  mutate(ANO = lubridate::year(DT_COMPTC)) |> 
+  mutate(TRIMESTRE = yearquarter(DT_COMPTC)) |> 
+  mutate(SEMESTRE = paste0(ANO," S",lubridate::semester(DT_COMPTC))) -> IMA_B
+
+pin_write(board,
+          IRF_M,
+          "IRF_M",
+          type = "qs")
+
+pin_write(board,
+          IMA_S,
+          "IMA_S",
+          type = "qs")
+
+pin_write(board,
+          IMA_B,
+          "IMA_B",
+          type = "qs")
 
 
