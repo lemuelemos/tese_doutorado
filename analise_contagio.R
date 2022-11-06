@@ -143,6 +143,7 @@ future_map(unique(periodos_por_fundo$CNPJ_FUNDO), function(CNPJ){
   bind_rows() |> 
   tidyr::pivot_wider(names_from = Marco,values_from = Volatilidade) -> diferenca_vol_acoes_30_dias
 
+pin_write(board,diferenca_vol_acoes_30_dias,"diferenca_vol_acoes_30_dias")
 # Fundos de Ações - Volatilidade - 60 dias------------------------------------
 
 plan(multisession, workers = 10)  
@@ -174,6 +175,7 @@ future_map(unique(periodos_por_fundo$CNPJ_FUNDO), function(CNPJ){
   bind_rows() |> 
   tidyr::pivot_wider(names_from = Marco,values_from = Volatilidade) -> diferenca_vol_acoes_60_dias
 
+pin_write(board,diferenca_vol_acoes_60_dias,"diferenca_vol_acoes_60_dias")
 # Fundos Multimercado - Volatilidade ------------------------------------
 
 taxa_performance_fundos |> 
@@ -227,6 +229,7 @@ future_map(unique(periodos_por_fundo$CNPJ_FUNDO), function(CNPJ){
   bind_rows() |> 
   tidyr::pivot_wider(names_from = Marco,values_from = Volatilidade) -> diferenca_vol_multimercado_30_dias
 
+pin_write(board,diferenca_vol_multimercado_30_dias,"diferenca_vol_multimercado_30_dias")
 # Fundos Multimercado - Volatilidade - 60 Dias------------------------------------
 
 plan(multisession, workers = 10)
@@ -258,6 +261,7 @@ future_map(unique(periodos_por_fundo$CNPJ_FUNDO), function(CNPJ){
   bind_rows() |> 
   tidyr::pivot_wider(names_from = Marco,values_from = Volatilidade) -> diferenca_vol_multimercado_60_dias
 
+pin_write(board,diferenca_vol_multimercado_60_dias,"diferenca_vol_multimercado_60_dias")
 # Fundos Renda Fixa - Volatilidade ------------------------------------
 
 taxa_performance_fundos |> 
@@ -310,6 +314,7 @@ future_map(unique(periodos_por_fundo$CNPJ_FUNDO), function(CNPJ){
   bind_rows() |> 
   tidyr::pivot_wider(names_from = Marco,values_from = Volatilidade) -> diferenca_vol_rf_30_dias
 
+pin_write(board,diferenca_vol_rf_30_dias,"diferenca_vol_rf_30_dias")
 # Fundos Renda Fixa - Volatilidade - 30 Dias------------------------------------
 
 plan(multisession, workers = 10)
@@ -340,3 +345,101 @@ future_map(unique(periodos_por_fundo$CNPJ_FUNDO), function(CNPJ){
 }) |> 
   bind_rows() |> 
   tidyr::pivot_wider(names_from = Marco,values_from = Volatilidade) -> diferenca_vol_rf_60_dias
+
+pin_write(board,diferenca_vol_rf_60_dias,"diferenca_vol_rf_60_dias")
+
+
+
+
+diferenca_vol_multimercado_60_dias <- pin_read(board,"diferenca_vol_multimercado_60_dias")
+diferenca_vol_multimercado_30_dias <- pin_read(board,"diferenca_vol_multimercado_30_dias")
+diferenca_vol_rf_60_dias <- pin_read(board,"diferenca_vol_rf_60_dias")
+diferenca_vol_acoes_60_dias <- pin_read(board,"diferenca_vol_acoes_60_dias")
+
+select(informe_diario_fundos_multimercado,
+       CNPJ_FUNDO,
+       PUBLICO_ALVO,
+       TP_PRAZO,
+       POLIT_INVEST,
+       DISTRIB,
+       FUNDO_COTAS.x,
+       CLASSE_ANBIMA,
+       EXISTE_TAXA_PERFM,
+       CPF_CNPJ_GESTOR,
+       FUNDO_EXCLUSIVO,
+       CONDOM) |> 
+  distinct_all() |> 
+  filter(POLIT_INVEST != "ENHANCED") -> dados_fundos_multimercados
+
+
+select(informe_diario_fundos_rf,
+       CNPJ_FUNDO,
+       PUBLICO_ALVO,
+       TP_PRAZO,
+       POLIT_INVEST,
+       DISTRIB,
+       FUNDO_COTAS.x,
+       CLASSE_ANBIMA,
+       EXISTE_TAXA_PERFM,
+       CPF_CNPJ_GESTOR,
+       FUNDO_EXCLUSIVO,
+       CONDOM) |> 
+  distinct_all() |> 
+  filter(POLIT_INVEST != "ENHANCED") -> dados_fundos_rf
+
+select(informe_diario_fundos_acoes,
+       CNPJ_FUNDO,
+       PUBLICO_ALVO,
+       TP_PRAZO,
+       POLIT_INVEST,
+       DISTRIB,
+       FUNDO_COTAS.x,
+       CLASSE_ANBIMA,
+       EXISTE_TAXA_PERFM,
+       CPF_CNPJ_GESTOR,
+       FUNDO_EXCLUSIVO,
+       CONDOM) |> 
+  distinct_all() |> 
+  filter(POLIT_INVEST != "ENHANCED") -> dados_fundos_acoes
+
+
+diferenca_vol_rf_60_dias |> 
+  na.omit() |>
+  mutate(Mês = factor(format(DT_COMPTC,"%B"))) |> 
+  left_join(dados_fundos_rf,by = "CNPJ_FUNDO") |> 
+  filter(CONDOM == "Aberto") |> 
+  group_by(Mês,EXISTE_TAXA_PERFM,) |>
+  summarise(`60 Dias Antes` = mean(`60 Dias Antes`),
+            `60 Dias Depois` = mean(`60 Dias Depois`)) |> 
+  mutate(`Diferença` = `60 Dias Antes`-`60 Dias Depois`) |> 
+  arrange(`Mês`) |> 
+  print(n=72)
+
+
+diferenca_vol_multimercado_30_dias |> 
+  na.omit() |>
+  mutate(Mês = factor(format(DT_COMPTC,"%B"))) |> 
+  left_join(dados_fundos_multimercados,by = "CNPJ_FUNDO") |> 
+  filter(CONDOM == "Aberto") |>
+  group_by(Mês,EXISTE_TAXA_PERFM,POLIT_INVEST) |> 
+  summarise(`30 Dias Antes` = mean(`30 Dias Antes`),
+            `30 Dias Depois` = mean(`30 Dias Depois`)) |> 
+  mutate(`Diferença` = `30 Dias Antes`-`30 Dias Depois`) |> 
+  print(n=24)
+
+
+
+diferenca_vol_acoes_60_dias |> 
+  na.omit() |>
+  mutate(Mês = factor(format(DT_COMPTC,"%B"))) |> 
+  left_join(dados_fundos_acoes,by = "CNPJ_FUNDO") |> 
+  filter(CONDOM == "Aberto") |> 
+  group_by(Mês,EXISTE_TAXA_PERFM,POLIT_INVEST) |>
+  summarise(`60 Dias Antes` = mean(`60 Dias Antes`),
+            `60 Dias Depois` = mean(`60 Dias Depois`)) |> 
+  mutate(`Diferença` = `60 Dias Antes`-`60 Dias Depois`) |> 
+  arrange(`Mês`) |> 
+  print(n=72)
+
+
+
