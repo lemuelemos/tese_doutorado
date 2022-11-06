@@ -2020,6 +2020,9 @@ plm(CAPTC_LIQ ~
 summary(plm_acoes_fixo)
 ```
 
-#### 
+# Análise de Contágio e Gerênciamento de Resultado
 
+# 
+
+#### 
 

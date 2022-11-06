@@ -72,15 +72,15 @@ informe_diario_fundos |>
 
 informe_diario_fundos |> 
   left_join(select(extrato_fi_atual,-DT_COMPTC), by = "CNPJ_FUNDO") |>
-  filter(CLASSE == "Fundo de Ações") -> informe_diario_fundos_acoes
+  filter(CLASSE == "Fundo de Ações") |> collect() -> informe_diario_fundos_acoes
 
 informe_diario_fundos |> 
   left_join(select(extrato_fi_atual,-DT_COMPTC), by = "CNPJ_FUNDO") |>
-  filter(CLASSE == "Fundo Multimercado") -> informe_diario_fundos_multimercado
+  filter(CLASSE == "Fundo Multimercado") |> collect() -> informe_diario_fundos_multimercado
 
 informe_diario_fundos |> 
   left_join(select(extrato_fi_atual,-DT_COMPTC), by = "CNPJ_FUNDO") |>
-  filter(CLASSE == "Fundo de Renda Fixa") -> informe_diario_fundos_rf
+  filter(CLASSE == "Fundo de Renda Fixa") |> collect() -> informe_diario_fundos_rf
 
 rm(informe_diario_fundos)
 

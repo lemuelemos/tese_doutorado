@@ -168,6 +168,19 @@ pin_write(board,
 ############## DADOS BALANCETES #################
 plan(multisession, workers = 6)
 
+meses_download <- format(seq(as.Date("2005-01-01"),as.Date("2014-12-31"),by = "month"),"%Y%m")
+
+future_map(meses_download, function(mes){
+  tryCatch({
+    url <- paste0("https://dados.cvm.gov.br/dados/FI/DOC/BALANCETE/DADOS/HIST/balancete_fi_",mes,".zip")
+    destfile <- paste0("./balancetes/",mes,".zip")
+    download.file(url,destfile)
+  }, error = function(e){
+    url <- paste0("https://dados.cvm.gov.br/dados/FI/DOC/BALANCETE/DADOS/HIST/balancete_fi_",mes,".zip")
+    destfile <- paste0("./balancetes/",mes,".zip")
+    download.file(url,destfile)
+  })
+})
 
 meses_download <- format(seq(as.Date("2015-01-01"),as.Date("2021-06-01"),by = "month"),"%Y%m")
 
@@ -182,9 +195,6 @@ future_map(meses_download, function(mes){
     download.file(url,destfile)
   })
 })
-
-
-
 
 zipfiles <- list.files("./balancetes/",full.names = T)
 
