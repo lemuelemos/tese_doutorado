@@ -403,12 +403,12 @@ select(informe_diario_fundos_acoes,
   filter(POLIT_INVEST != "ENHANCED") -> dados_fundos_acoes
 
 
-diferenca_vol_rf_60_dias |> 
+diferenca_vol_multimercado_60_dias |> 
   na.omit() |>
   mutate(Mês = factor(format(DT_COMPTC,"%B"))) |> 
-  left_join(dados_fundos_rf,by = "CNPJ_FUNDO") |> 
+  left_join(dados_fundos_multimercados,by = "CNPJ_FUNDO") |> 
   filter(CONDOM == "Aberto") |> 
-  group_by(Mês,EXISTE_TAXA_PERFM,) |>
+  group_by(Mês,EXISTE_TAXA_PERFM) |>
   summarise(`60 Dias Antes` = mean(`60 Dias Antes`),
             `60 Dias Depois` = mean(`60 Dias Depois`)) |> 
   mutate(`Diferença` = `60 Dias Antes`-`60 Dias Depois`) |> 
@@ -431,15 +431,34 @@ diferenca_vol_multimercado_30_dias |>
 
 diferenca_vol_acoes_60_dias |> 
   na.omit() |>
-  mutate(Mês = factor(format(DT_COMPTC,"%B"))) |> 
+  mutate(Mês = factor(format(DT_COMPTC,"%B"),levels = c("janeiro",
+                                                        "fevereiro",
+                                                        "março",
+                                                        "abril",
+                                                        "maio",
+                                                        "junho",
+                                                        "julho",
+                                                        "agosto",
+                                                        "setembro",
+                                                        "outubro",
+                                                        "novembro",
+                                                        "dezembro"))) |> 
+  tidyr::pivot_longer(cols = c("60 Dias Antes","60 Dias Depois"),
+                      names_to = "PERIODO",
+                      values_to = "Volatilidade") |> 
   left_join(dados_fundos_acoes,by = "CNPJ_FUNDO") |> 
   filter(CONDOM == "Aberto") |> 
-  group_by(Mês,EXISTE_TAXA_PERFM,POLIT_INVEST) |>
-  summarise(`60 Dias Antes` = mean(`60 Dias Antes`),
-            `60 Dias Depois` = mean(`60 Dias Depois`)) |> 
-  mutate(`Diferença` = `60 Dias Antes`-`60 Dias Depois`) |> 
-  arrange(`Mês`) |> 
-  print(n=72)
+  group_by(Mês,EXISTE_TAXA_PERFM,PERIODO) |>
+  summarise(`Volatilidades` = list(t.test(`Volatilidade`))) |> 
+  mutate(`Volatilidades` = purrr::map(`Volatilidades`,broom::tidy)) |> 
+  tidyr::unnest(`Volatilidades`) |> 
+  ungroup() |> 
+  arrange(Mês) |> 
+  ggplot(aes(x= estimate,y=Mês,colour = PERIODO)) +
+  geom_point(aes(shape = EXISTE_TAXA_PERFM)) +
+  geom_errorbar(aes(xmin=conf.low,xmax = conf.high)) +
+  theme_bw() 
+ 
 
 
 

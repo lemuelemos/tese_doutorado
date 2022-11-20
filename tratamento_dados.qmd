@@ -80,7 +80,7 @@ Após isso, é feito o pareamento das bases de cadastro e extrato de informaçõ
 
 2.  Apenas gestores PJ;
 
-3.  Fundos com inconsistências nas bases no questio de serem fundos de cotas ou não foram excluídos da base;
+3.  Fundos com inconsistências nas bases no quesitio de serem fundos de cotas ou não foram excluídos da base;
 
 4.  Fundos que na classe CVM são de ações e na classe Anbima tiverem denominação Renda Fixa foram excluídos;
 
@@ -99,29 +99,73 @@ informe_diario_fundos <- pin_read(board,"informe_diario_fundos") |>
   lazy_dt()
 
 informe_diario_fundos |> 
-  filter(CNPJ_FUNDO %in% extrato_fi_atual$CNPJ_FUNDO) -> informe_diario_fundos
-  
-informe_diario_fundos |> 
-  left_join(select(extrato_fi_atual,-DT_COMPTC), by = "CNPJ_FUNDO") |>
-  filter(CLASSE == "Fundo de Ações") |> 
-  collect() -> informe_diario_fundos_acoes
+  filter(CNPJ_FUNDO %in% 
+           extrato_fi_atual$CNPJ_FUNDO) -> informe_diario_fundos
+
+### Fundos de Ações
 
 informe_diario_fundos |> 
-  left_join(select(extrato_fi_atual,-DT_COMPTC), by = "CNPJ_FUNDO") |>
+  left_join(select(extrato_fi_atual,-DT_COMPTC), 
+            by = "CNPJ_FUNDO") |>
+  filter(CLASSE == "Fundo de Ações") |> 
+  filter(!CLASSE_ANBIMA %in% c("AÇÕES - FUNDOS FECHADOS"),
+         CONDOM == "Aberto") |> 
+  collect() -> informe_diario_fundos_acoes
+
+informe_diario_fundos_acoes |> 
+  distinct(DT_COMPTC,CNPJ_FUNDO,.keep_all = T) |> 
+  group_by(CNPJ_FUNDO) |>
+  mutate(Qtd = n()) |> 
+  ungroup() |> 
+  filter(Qtd > max(Qtd)/2) |> 
+  filter(!CNPJ_FUNDO %in% 
+           distinct(count(filter(informe_diario_fundos_acoes,
+                                 VL_PATRIM_LIQ < 1000000),
+                          CNPJ_FUNDO),
+                    CNPJ_FUNDO)$CNPJ_FUNDO) -> informe_diario_fundos_acoes
+  
+### Fundos Multimercados
+  
+informe_diario_fundos |> 
+  left_join(select(extrato_fi_atual,-DT_COMPTC), 
+            by = "CNPJ_FUNDO") |>
   filter(CLASSE == "Fundo Multimercado") |> 
+  filter(!str_detect(CLASSE_ANBIMA,"AÇÕES|RENDA FIXA"),
+         CONDOM == "Aberto") |>
   collect() -> informe_diario_fundos_multimercado
 
 informe_diario_fundos_multimercado |> 
-  filter(!CNPJ_FUNDO %in% distinct(filter(informe_diario_fundos_multimercado ,VL_PATRIM_LIQ < 0),CNPJ_FUNDO)$CNPJ_FUNDO) -> informe_diario_fundos_multimercado
+  distinct(DT_COMPTC,CNPJ_FUNDO,.keep_all = T) |> 
+  group_by(CNPJ_FUNDO) |>
+  mutate(Qtd = n()) |> 
+  ungroup() |> 
+  filter(Qtd > max(Qtd)/2) |>
+  filter(!CNPJ_FUNDO %in% 
+           distinct(filter(informe_diario_fundos_multimercado,
+                           VL_PATRIM_LIQ < 1000000),
+                    CNPJ_FUNDO)$CNPJ_FUNDO) -> informe_diario_fundos_multimercado
+
+### Fundos Renda Fixa
 
 informe_diario_fundos |> 
-  left_join(select(extrato_fi_atual,-DT_COMPTC), by = "CNPJ_FUNDO") |>
-  filter(CLASSE == "Fundo de Renda Fixa") |> 
+  left_join(select(extrato_fi_atual,-DT_COMPTC),
+            by = "CNPJ_FUNDO") |>
+  filter(CLASSE == "Fundo de Renda Fixa") |>
+  filter(!str_detect(CLASSE_ANBIMA,"AÇÕES|MULTIMERCADO"),
+         CONDOM == "Aberto") |>
   collect() -> informe_diario_fundos_rf
 
-informe_diario_fundos_rf |> 
-  filter(!CNPJ_FUNDO %in% distinct(filter(informe_diario_fundos_rf ,VL_PATRIM_LIQ < 0),CNPJ_FUNDO)$CNPJ_FUNDO) -> informe_diario_fundos_rf
-
+informe_diario_fundos_rf |>
+  distinct(DT_COMPTC,CNPJ_FUNDO,.keep_all = T) |> 
+  group_by(CNPJ_FUNDO) |>
+  mutate(Qtd = n()) |> 
+  ungroup() |> 
+  filter(Qtd > max(Qtd)/2) |>
+  filter(!CNPJ_FUNDO %in% 
+           distinct(filter(informe_diario_fundos_rf ,
+                           VL_PATRIM_LIQ < 1000000),
+                    CNPJ_FUNDO)$CNPJ_FUNDO) -> informe_diario_fundos_rf
+rm(informe_diario_fundos)
 ```
 
 #### Manipulando Informes Diários
@@ -335,7 +379,7 @@ informe_diario_fundos_acoes |>
   mutate(MÊS = yearmonth(DT_COMPTC)) |> 
   mutate(ANO = lubridate::year(DT_COMPTC)) |> 
   mutate(TRIMESTRE = yearquarter(DT_COMPTC)) |> 
-  mutate(SEMESTRE = paste0(ANO," S",lubridate::semester(DT_COMPTC))) |> 
+  mutate(SEMESTRE = lubridate::semester(DT_COMPTC,with_year = T)) |> 
   mutate(TRIB_LPRAZO = case_when(is.na(TRIB_LPRAZO) | 
                                  TRIB_LPRAZO == "N/A" |
                                  TRIB_LPRAZO == "N" ~ 0,
@@ -386,7 +430,7 @@ informe_diario_fundos_multimercado |>
   mutate(MÊS = yearmonth(DT_COMPTC)) |> 
   mutate(ANO = lubridate::year(DT_COMPTC)) |> 
   mutate(TRIMESTRE = yearquarter(DT_COMPTC)) |> 
-  mutate(SEMESTRE = paste0(ANO," S",lubridate::semester(DT_COMPTC))) |> 
+  mutate(SEMESTRE = lubridate::semester(DT_COMPTC,with_year = T)) |> 
   mutate(TRIB_LPRAZO = case_when(is.na(TRIB_LPRAZO) | 
                                  TRIB_LPRAZO == "N/A" |
                                  TRIB_LPRAZO == "N" ~ 0,
@@ -437,7 +481,7 @@ informe_diario_fundos_rf |>
   mutate(MÊS = yearmonth(DT_COMPTC)) |> 
   mutate(ANO = lubridate::year(DT_COMPTC)) |> 
   mutate(TRIMESTRE = yearquarter(DT_COMPTC)) |> 
-  mutate(SEMESTRE = paste0(ANO," S",lubridate::semester(DT_COMPTC))) |> 
+  mutate(SEMESTRE = lubridate::semester(DT_COMPTC,with_year = T)) |> 
   mutate(TRIB_LPRAZO = case_when(is.na(TRIB_LPRAZO) | 
                                  TRIB_LPRAZO == "N/A" |
                                  TRIB_LPRAZO == "N" ~ 0,
@@ -539,7 +583,7 @@ dados_painel_acoes |>
   mutate(RENTABILIDADE = case_when(RENTABILIDADE == Inf ~ 0,
                                    T ~ RENTABILIDADE)) |> 
   mutate(CAPTC_LIQ = CAPTC_DIA-RESG_DIA) |> 
-  mutate(SEMESTRE = as.character(SEMESTRE)) |> 
+  mutate(SEMESTRE = SEMESTRE) |> 
   mutate(TAMANHO = case_when(VL_PATRIM_LIQ >= 15000000 &
                              VL_PATRIM_LIQ <  50000000 ~ "Pequeno",
                              VL_PATRIM_LIQ >= 50000000 &
@@ -1124,7 +1168,8 @@ dolar_anual |>
 #### Dados macro Período Semestral
 
 ```{r message=FALSE,warning=F}
-pin_read(board,"dolar") |> 
+pin_read(board,"dolar") |>
+  mutate(SEMESTRE = lubridate::semester(DT_COMPTC,with_year = T)) |> 
   group_by(SEMESTRE) |> 
   arrange(DT_COMPTC) |> 
   summarise(`VAR SEMESTRAL(%) Dólar` = (dplyr::last(USDBRL)/
@@ -1132,6 +1177,7 @@ pin_read(board,"dolar") |>
             USDBRL = dplyr::last(USDBRL)) -> dolar_semestral
 
 pin_read(board,"IRF_M") |> 
+  mutate(SEMESTRE = lubridate::semester(DT_COMPTC,with_year = T)) |> 
   group_by(SEMESTRE) |> 
   arrange(DT_COMPTC) |> 
   summarise(`VAR SEMESTRAL(%) IRF-M` = (dplyr::last(IRF_M)/
@@ -1139,6 +1185,7 @@ pin_read(board,"IRF_M") |>
             IRF_M = dplyr::last(IRF_M)) -> IRF_M_semestral
 
 pin_read(board,"IMA_S") |> 
+  mutate(SEMESTRE = lubridate::semester(DT_COMPTC,with_year = T)) |> 
   group_by(SEMESTRE) |> 
   arrange(DT_COMPTC) |> 
   summarise(`VAR SEMESTRAL(%) IMA-S` = (dplyr::last(IMA_S)/
@@ -1146,6 +1193,7 @@ pin_read(board,"IMA_S") |>
             IMA_S = dplyr::last(IMA_S)) -> IMA_S_semestral
 
 pin_read(board,"IMA_B") |> 
+  mutate(SEMESTRE = lubridate::semester(DT_COMPTC,with_year = T)) |> 
   group_by(SEMESTRE) |> 
   arrange(DT_COMPTC) |> 
   summarise(`VAR SEMESTRAL(%) IMA-B` = (dplyr::last(IMA_B)/
@@ -1156,8 +1204,7 @@ pin_read(board,"IMA_B") |>
 pin_read(board,"IBOV") |> 
     arrange(COMPETENCIA) |> 
     distinct_all() |> 
-    mutate(ANO = lubridate::year(zoo::as.Date(COMPETENCIA))) |>
-    mutate(SEMESTRE = paste0(ANO," S",lubridate::semester(zoo::as.Date(COMPETENCIA)))) |> 
+    mutate(SEMESTRE = lubridate::semester(COMPETENCIA,with_year = T)) |> 
     group_by(SEMESTRE) |>
     summarise(`VAR SEMESTRAL(%) IBOV` = (dplyr::last(IBOV)/
                                              dplyr::first(IBOV))-1,
@@ -1165,6 +1212,7 @@ pin_read(board,"IBOV") |>
 
 pin_read(board,"IPCA") |> 
   filter(ANO > 2004) |> 
+  mutate(SEMESTRE = lubridate::semester(DT_COMPTC,with_year = T)) |> 
   group_by(SEMESTRE) |> 
   arrange(DT_COMPTC) |> 
   summarise(`VAR SEMESTRAL(%) IPCA` = (dplyr::last(IPCA)/
@@ -1174,12 +1222,14 @@ pin_read(board,"IPCA") |>
 
 pin_read(board,"expectativa_inflacao_12M") |> 
   filter(ANO > 2004) |> 
+  mutate(SEMESTRE = lubridate::semester(DT_COMPTC,with_year = T)) |> 
   group_by(SEMESTRE) |> 
   arrange(DT_COMPTC) |> 
   summarise(`VAR SEMESTRAL(%) Expectativa IPCA` = (dplyr::last(Mediana)/dplyr::first(Mediana))-1,
             `Expectativa IPCA 12M` = dplyr::last(Mediana)) -> expectativa_ipca_12M_semestral
 
 pin_read(board,"selic") |> 
+  mutate(SEMESTRE = lubridate::semester(DT_COMPTC,with_year = T)) |> 
   group_by(SEMESTRE) |> 
   arrange(DT_COMPTC) |> 
   summarise(`VAR SEMESTRAL(%) SELIC` = (dplyr::last(SELIC)/
@@ -1188,8 +1238,7 @@ pin_read(board,"selic") |>
 
 pin_read(board,"expectativa_selic") |> 
   filter(str_detect(Reuniao,"R8")) |> 
-  mutate(ANO = lubridate::year(Data)) |> 
-  mutate(SEMESTRE = paste0(ANO," S",lubridate::semester(Data))) |>
+  mutate(SEMESTRE = lubridate::semester(Data,with_year = T)) |> 
   group_by(SEMESTRE) |> 
   arrange(Data) |> 
   summarise_all(dplyr::last) |> 
@@ -1200,9 +1249,7 @@ pin_read(board,"expectativa_selic") |>
 
 pin_read(board,"expectativa_cambio") |> 
   filter(str_detect(DataReferencia,"12/")) |>
-  mutate(ANO = lubridate::year(Data)) |> 
-  mutate(SEMESTRE = paste0(ANO," S",lubridate::semester(Data))) |>
-  filter(ANO > 2004) |> 
+  mutate(SEMESTRE = lubridate::semester(Data,with_year = T)) |>  
   group_by(SEMESTRE) |> 
   arrange(Data) |> 
   summarise_all(dplyr::last) |> 
@@ -1212,6 +1259,7 @@ pin_read(board,"expectativa_cambio") |>
   rename(`Expec.CAMBIO` = Mediana) -> expectativa_cambio_semestral
 
 pin_read(board,"IBC_BR") |> 
+  mutate(SEMESTRE = lubridate::semester(DT_COMPTC,with_year = T)) |> 
   group_by(SEMESTRE) |> 
   arrange(DT_COMPTC) |> 
   summarise(`VAR SEMESTRAL(%) IBC-Br` = (dplyr::last(`IBC-Br`)/
@@ -1229,7 +1277,7 @@ dolar_semestral |>
   left_join(IRF_M_semestral) |> 
   left_join(IMA_S_semestral) |> 
   left_join(IMA_B_semestral) |> 
-  mutate(SEMESTRE = as.character(SEMESTRE)) -> variaveis_macro_semestral
+  mutate(SEMESTRE = SEMESTRE) -> variaveis_macro_semestral
 ```
 
 #### Dados macro Período Trimestral
@@ -1807,12 +1855,12 @@ summary(plm_mm_fixo)
 #### Trimestral
 
 ```{r}
-dados_painel_acoes_trimestre |> 
-    count(CNPJ_FUNDO) |> 
-    filter(n>33) -> fundos_maisde50pct_amostra
+# dados_painel_acoes_trimestre |> 
+#     count(CNPJ_FUNDO) |> 
+#     filter(n>33) -> fundos_maisde50pct_amostra
 
 dados_painel_acoes_trimestre |> 
-    filter(CNPJ_FUNDO %in% fundos_maisde50pct_amostra$CNPJ_FUNDO) |> 
+    # filter(CNPJ_FUNDO %in% fundos_maisde50pct_amostra$CNPJ_FUNDO) |> 
     mutate(MICRO = if_else(TAMANHO == "Micro",1,0),
            PEQUENO = if_else(TAMANHO == "Pequeno",1,0),
            `MÉDIO` = if_else(TAMANHO == "Médio",1,0),
@@ -1879,12 +1927,8 @@ summary(plm_acoes_fixo)
 #### Semestral
 
 ```{r}
-dados_painel_acoes_semestre |> 
-    count(CNPJ_FUNDO) |> 
-    filter(n>15) -> fundos_maisde50pct_amostra
 
-dados_painel_acoes_semestre |> 
-    filter(CNPJ_FUNDO %in% fundos_maisde50pct_amostra$CNPJ_FUNDO) |> 
+dados_painel_acoes_semestre |>  
     mutate(MICRO = if_else(TAMANHO == "Micro",1,0),
            PEQUENO = if_else(TAMANHO == "Pequeno",1,0),
            `MÉDIO` = if_else(TAMANHO == "Médio",1,0),
@@ -1906,13 +1950,13 @@ dados_painel_acoes_semestre |>
          -GRUPO,
          -TAMANHO_CAP,
          -PUBLICO_ALVO) |> 
-  rename(VART_IBOV = `VAR SEMESTRAL(%) IBOV`,
+  rename(VARS_IBOV = `VAR SEMESTRAL(%) IBOV`,
          EXPEC_IPCA_12M = `Expectativa IPCA 12M`,
          `IBC_Br` = `IBC-Br`,
-         VART_DOLAR = `VAR SEMESTRAL(%) Dólar`,
-         VART_EXPEC_IPCA = `VAR SEMESTRAL(%) Expectativa IPCA`,
-         VART_EXPEC_DOLAR = `VAR SEMESTRAL(%) Expec.CAMBIO`,
-         VART_EXPEC_IBC = `VAR SEMESTRAL(%) IBC-Br`) -> dados_painel_acoes_semestre_reg
+         VARS_DOLAR = `VAR SEMESTRAL(%) Dólar`,
+         VARS_EXPEC_IPCA = `VAR SEMESTRAL(%) Expectativa IPCA`,
+         VARS_EXPEC_DOLAR = `VAR SEMESTRAL(%) Expec.CAMBIO`,
+         VARS_EXPEC_IBC = `VAR SEMESTRAL(%) IBC-Br`) -> dados_painel_acoes_semestre_reg
 
 plm(CAPTC_LIQ ~
       lag(RENTABILIDADE)*PG+
@@ -1926,16 +1970,16 @@ plm(CAPTC_LIQ ~
       lag(IMA_S)*PG+
       lag(SELIC)*PG+
       lag(IBOV)*PG+
-      lag(VART_IBOV)*PG+
+      lag(VARS_IBOV)*PG+
       lag(IPCA)*PG+
       lag(EXPEC_IPCA_12M)+
-      lag(VART_EXPEC_IPCA)+
+      lag(VARS_EXPEC_IPCA)+
       lag(Expec.SELIC)+
       lag(USDBRL)+
       lag(Expec.CAMBIO)+
-      lag(VART_DOLAR)+
-      lag(VART_EXPEC_DOLAR)+
-      lag(VART_EXPEC_IBC)+
+      lag(VARS_DOLAR)+
+      lag(VARS_EXPEC_DOLAR)+
+      lag(VARS_EXPEC_IBC)+
       lag(IBC_Br)+
       GIGANTE+
       GRANDE+
@@ -1978,15 +2022,16 @@ dados_painel_acoes_ano |>
          -GRUPO,
          -TAMANHO_CAP,
          -PUBLICO_ALVO) |> 
-  rename(VART_IBOV = `VAR ANUAL(%) IBOV`,
+  rename(VARA_IBOV = `VAR ANUAL(%) IBOV`,
          EXPEC_IPCA_12M = `Expectativa IPCA 12M`,
          `IBC_Br` = `IBC-Br`,
-         VART_DOLAR = `VAR ANUAL(%) Dólar`,
-         VART_EXPEC_IPCA = `VAR ANUAL(%) Expectativa IPCA`,
-         VART_EXPEC_DOLAR = `VAR ANUAL(%) Expec.CAMBIO`,
-         VART_EXPEC_IBC = `VAR ANUAL(%) IBC-Br`) -> dados_painel_acoes_ano_reg
+         VARA_DOLAR = `VAR ANUAL(%) Dólar`,
+         VARA_EXPEC_IPCA = `VAR ANUAL(%) Expectativa IPCA`,
+         VARA_EXPEC_DOLAR = `VAR ANUAL(%) Expec.CAMBIO`,
+         VARA_EXPEC_IBC = `VAR ANUAL(%) IBC-Br`) -> dados_painel_acoes_ano_reg
 
 plm(CAPTC_LIQ ~
+      PG+
       lag(RENTABILIDADE)*PG+
       lag(RENTABILIDADE)*TRIB_LPRAZO+
       lag(RENTABILIDADE)*FUNDO_COTAS+
@@ -1998,16 +2043,16 @@ plm(CAPTC_LIQ ~
       lag(IMA_S)*PG+
       lag(SELIC)*PG+
       lag(IBOV)*PG+
-      lag(VART_IBOV)*PG+
+      lag(VARA_IBOV)*PG+
       lag(IPCA)*PG+
       lag(EXPEC_IPCA_12M)+
-      lag(VART_EXPEC_IPCA)+
+      lag(VARA_EXPEC_IPCA)+
       lag(Expec.SELIC)+
       lag(USDBRL)+
       lag(Expec.CAMBIO)+
-      lag(VART_DOLAR)+
-      lag(VART_EXPEC_DOLAR)+
-      lag(VART_EXPEC_IBC)+
+      lag(VARA_DOLAR)+
+      lag(VARA_EXPEC_DOLAR)+
+      lag(VARA_EXPEC_IBC)+
       lag(IBC_Br)+
       GIGANTE+
       GRANDE+
@@ -2025,4 +2070,3 @@ summary(plm_acoes_fixo)
 # 
 
 #### 
-
