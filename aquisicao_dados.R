@@ -4,7 +4,7 @@ source("global.R")
 ###### Expactativas de Inflação 12 meses ######
 
 expectativa_inflacao_12M <- rbcb::get_market_expectations("inflation-12-months", "IPCA", 
-                                                          end_date = "2021-12-31")  |> 
+                                                          end_date = "2022-12-31")  |> 
   select(Data,Mediana) |> 
   rename(DT_COMPTC = Data) |> 
   mutate(MÊS = yearmonth(DT_COMPTC)) |> 
@@ -17,6 +17,10 @@ pin_write(board,
           expectativa_inflacao_12M,
           "expectativa_inflacao_12M",
           type = "qs")
+
+###### Expactativas de Inflação 12 meses ######
+
+
 
 ###### Abertura da Curva de Juros ######
 

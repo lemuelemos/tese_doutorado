@@ -123,6 +123,37 @@ informe_diario_fundos_acoes |>
                                  VL_PATRIM_LIQ < 1000000),
                           CNPJ_FUNDO),
                     CNPJ_FUNDO)$CNPJ_FUNDO) -> informe_diario_fundos_acoes
+
+informe_diario_fundos_acoes |>  
+  filter(CONDOM == "Aberto") |> 
+  mutate(CAPTC_DIA = CAPTC_DIA/1000000,
+         RESG_DIA = RESG_DIA/1000000) |> 
+  mutate(COMPETÊNCIA = yearmonth(DT_COMPTC)) |> 
+  group_by(CNPJ_FUNDO,COMPETÊNCIA) |> 
+  summarise(CAPTC_DIA = sum(CAPTC_DIA),
+            RESG_DIA = sum(RESG_DIA)) |> 
+  ungroup() |> 
+  mutate(CAPTC_LIQ = CAPTC_DIA-RESG_DIA) |> 
+  group_by(CNPJ_FUNDO) |> 
+  mutate(Qtd = n()) |> 
+  ungroup() |> 
+  filter(Qtd > Qtd/2) |> 
+  ungroup() |> 
+  mutate(CPT_ZERO = case_when(CAPTC_LIQ == 0 ~ "S",
+                              T ~ "N")) |> 
+  count(CNPJ_FUNDO,CPT_ZERO) |> 
+  tidyr::pivot_wider(names_from = CPT_ZERO,
+                     values_from = n,
+                     values_fill = 0) |> 
+  group_by(CNPJ_FUNDO) |> 
+  mutate(PROP_ZERO = (S/(S+N))*100) |> 
+  ungroup() |> 
+  filter(PROP_ZERO < 50) |> 
+  distinct(CNPJ_FUNDO) -> fundos_elegiveis_acoes
+
+informe_diario_fundos_acoes |> 
+  filter(CNPJ_FUNDO %in% 
+           fundos_elegiveis_acoes$CNPJ_FUNDO) -> informe_diario_fundos_acoes
   
 ### Fundos Multimercados
   
@@ -145,6 +176,37 @@ informe_diario_fundos_multimercado |>
                            VL_PATRIM_LIQ < 1000000),
                     CNPJ_FUNDO)$CNPJ_FUNDO) -> informe_diario_fundos_multimercado
 
+informe_diario_fundos_multimercado |> 
+  filter(CONDOM == "Aberto") |> 
+  mutate(CAPTC_DIA = CAPTC_DIA/1000000,
+         RESG_DIA = RESG_DIA/1000000) |> 
+  mutate(COMPETÊNCIA = yearmonth(DT_COMPTC)) |> 
+  group_by(CNPJ_FUNDO,COMPETÊNCIA) |> 
+  summarise(CAPTC_DIA = sum(CAPTC_DIA),
+            RESG_DIA = sum(RESG_DIA)) |> 
+  ungroup() |> 
+  mutate(CAPTC_LIQ = CAPTC_DIA-RESG_DIA) |> 
+  group_by(CNPJ_FUNDO) |> 
+  mutate(Qtd = n()) |> 
+  ungroup() |> 
+  filter(Qtd > Qtd/2) |> 
+  ungroup() |> 
+  mutate(CPT_ZERO = case_when(CAPTC_LIQ == 0 ~ "S",
+                              T ~ "N")) |> 
+  count(CNPJ_FUNDO,CPT_ZERO) |> 
+  tidyr::pivot_wider(names_from = CPT_ZERO,
+                     values_from = n,
+                     values_fill = 0) |> 
+  group_by(CNPJ_FUNDO) |> 
+  mutate(PROP_ZERO = (S/(S+N))*100) |> 
+  ungroup() |> 
+  filter(PROP_ZERO < 50) |> 
+  distinct(CNPJ_FUNDO) -> fundos_elegiveis_mm
+
+informe_diario_fundos_multimercado |> 
+  filter(CNPJ_FUNDO %in% 
+           fundos_elegiveis_mm$CNPJ_FUNDO) -> informe_diario_fundos_multimercado
+
 ### Fundos Renda Fixa
 
 informe_diario_fundos |> 
@@ -165,7 +227,42 @@ informe_diario_fundos_rf |>
            distinct(filter(informe_diario_fundos_rf ,
                            VL_PATRIM_LIQ < 1000000),
                     CNPJ_FUNDO)$CNPJ_FUNDO) -> informe_diario_fundos_rf
+
+informe_diario_fundos_rf |> 
+  filter(CONDOM == "Aberto") |> 
+  mutate(CAPTC_DIA = CAPTC_DIA/1000000,
+         RESG_DIA = RESG_DIA/1000000) |> 
+  mutate(COMPETÊNCIA = yearmonth(DT_COMPTC)) |> 
+  group_by(CNPJ_FUNDO,COMPETÊNCIA) |> 
+  summarise(CAPTC_DIA = sum(CAPTC_DIA),
+            RESG_DIA = sum(RESG_DIA)) |> 
+  ungroup() |> 
+  mutate(CAPTC_LIQ = CAPTC_DIA-RESG_DIA) |> 
+  group_by(CNPJ_FUNDO) |> 
+  mutate(Qtd = n()) |> 
+  ungroup() |> 
+  filter(Qtd > Qtd/2) |> 
+  ungroup() |> 
+  mutate(CPT_ZERO = case_when(CAPTC_LIQ == 0 ~ "S",
+                              T ~ "N")) |> 
+  count(CNPJ_FUNDO,CPT_ZERO) |> 
+  tidyr::pivot_wider(names_from = CPT_ZERO,
+                                values_from = n,
+                     values_fill = 0) |> 
+  group_by(CNPJ_FUNDO) |> 
+  mutate(PROP_ZERO = (S/(S+N))*100) |> 
+  ungroup() |> 
+  filter(PROP_ZERO < 50) |> 
+  distinct(CNPJ_FUNDO) -> fundos_elegiveis_rf
+
+informe_diario_fundos_rf |> 
+  filter(CNPJ_FUNDO %in% 
+           fundos_elegiveis_rf$CNPJ_FUNDO) -> informe_diario_fundos_rf
+
 rm(informe_diario_fundos)
+rm(fundos_elegiveis_rf)
+rm(fundos_elegiveis_mm)
+rm(fundos_elegiveis_acoes)
 ```
 
 #### Manipulando Informes Diários
@@ -1162,7 +1259,9 @@ dolar_anual |>
   left_join(IMA_S_anual) |> 
   left_join(IMA_B_anual) |> 
   filter(ANO > 2004) |> 
-  mutate(ANO = as.character(ANO)) -> variaveis_macro_anual
+  mutate(ANO = ANO+1) |> 
+  mutate(ANO = as.character(ANO)) |> 
+  mutate(across(starts_with("VAR"),~.x*100))  -> variaveis_macro_anual
 ```
 
 #### Dados macro Período Semestral
@@ -1277,7 +1376,11 @@ dolar_semestral |>
   left_join(IRF_M_semestral) |> 
   left_join(IMA_S_semestral) |> 
   left_join(IMA_B_semestral) |> 
-  mutate(SEMESTRE = SEMESTRE) -> variaveis_macro_semestral
+  mutate(across(starts_with("VAR"),~.x*100)) |> 
+  mutate(SEMESTRE = case_when(str_detect(as.character(SEMESTRE),
+                                         "\\.1") ~ SEMESTRE+0.1,
+                              T ~ (SEMESTRE+1)-0.1)) |> 
+  mutate(SEMESTRE = as.character(SEMESTRE)) -> variaveis_macro_semestral
 ```
 
 #### Dados macro Período Trimestral
@@ -1383,7 +1486,11 @@ dolar_trimestral |>
   left_join(IRF_M_trimestral) |>
   left_join(IMA_S_trimestral) |> 
   left_join(IMA_B_trimestral) |> 
-  mutate(TRIMESTRE = as.character(TRIMESTRE)) -> variaveis_macro_trimestral
+  mutate(TRIMESTRE = as.character(yearquarter(TRIMESTRE)+
+                                    lubridate::quarter(1)
+                                )) |> 
+  mutate(TRIMESTRE = as.character(TRIMESTRE)) |> 
+  mutate(across(starts_with("VAR"),~.x*100)) -> variaveis_macro_trimestral
 ```
 
 #### Junção das bases
@@ -1393,35 +1500,48 @@ dolar_trimestral |>
 ## Ano ##
 
 dados_painel_acoes_ano |> 
-  left_join(variaveis_macro_anual) -> dados_painel_acoes_ano
+  left_join(variaveis_macro_anual,
+            by = "ANO") -> dados_painel_acoes_ano
 
 dados_painel_mm_ano |> 
-  left_join(variaveis_macro_anual) -> dados_painel_mm_ano
+  left_join(variaveis_macro_anual,
+            by = "ANO") -> dados_painel_mm_ano
 
 dados_painel_rf_ano |> 
-  left_join(variaveis_macro_anual) -> dados_painel_rf_ano
+  left_join(variaveis_macro_anual,
+            by = "ANO") -> dados_painel_rf_ano
 
 ## Semestre ##
 
 dados_painel_acoes_semestre |> 
-  left_join(variaveis_macro_semestral) -> dados_painel_acoes_semestre
+  mutate(SEMESTRE = as.character(SEMESTRE)) |> 
+  left_join(variaveis_macro_semestral,
+            by = "SEMESTRE") -> dados_painel_acoes_semestre
 
 dados_painel_mm_semestre |> 
-  left_join(variaveis_macro_semestral) -> dados_painel_mm_semestre
+  mutate(SEMESTRE = as.character(SEMESTRE)) |>
+  left_join(variaveis_macro_semestral,
+            by = "SEMESTRE") -> dados_painel_mm_semestre
 
 dados_painel_rf_semestre |> 
-  left_join(variaveis_macro_semestral) -> dados_painel_rf_semestre
+  mutate(SEMESTRE = as.character(SEMESTRE)) |>
+  left_join(variaveis_macro_semestral,
+            by = "SEMESTRE") -> dados_painel_rf_semestre
 
 ## Trimestre ##
 
 dados_painel_acoes_trimestre |> 
-  left_join(variaveis_macro_trimestral) -> dados_painel_acoes_trimestre
+  left_join(variaveis_macro_trimestral,
+            by = "TRIMESTRE") -> dados_painel_acoes_trimestre
 
 dados_painel_mm_trimestre |> 
-  left_join(variaveis_macro_trimestral) -> dados_painel_mm_trimestre
+  left_join(variaveis_macro_trimestral,
+       by = "TRIMESTRE") -> dados_painel_mm_trimestre
 
 dados_painel_rf_trimestre |> 
-  left_join(variaveis_macro_trimestral) -> dados_painel_rf_trimestre
+  left_join(variaveis_macro_trimestral,
+       by = "TRIMESTRE") -> dados_painel_rf_trimestre
+
 ```
 
 ## **Modelando os Dados**
@@ -1431,12 +1551,8 @@ dados_painel_rf_trimestre |>
 #### Trimestral
 
 ```{r message=FALSE,warning=F}
-dados_painel_rf_trimestre |> 
-    count(CNPJ_FUNDO) |> 
-    filter(n>33) -> fundos_maisde50pct_amostra
 
-dados_painel_rf_trimestre |> 
-    filter(CNPJ_FUNDO %in% fundos_maisde50pct_amostra$CNPJ_FUNDO) |> 
+dados_painel_rf_trimestre |>  
     mutate(MICRO = if_else(TAMANHO == "Micro",1,0),
            PEQUENO = if_else(TAMANHO == "Pequeno",1,0),
            `MÉDIO` = if_else(TAMANHO == "Médio",1,0),
@@ -1473,26 +1589,18 @@ plm(CAPTC_LIQ ~
       lag(RENTABILIDADE)*GRANDES_BANCOS+
       lag(RENTABILIDADE)*GRANDES_BANCOS*PG+
       lag(RENTABILIDADE)*GRANDES_BANCOS*IQ+
-      lag(IRF_M)*PG+
-      lag(IMA_B)*PG+
-      lag(IMA_S)*PG+
-      lag(SELIC)*PG+
-      lag(IBOV)*PG+
-      lag(VART_IBOV)*PG+
-      lag(IPCA)*PG+
-      lag(EXPEC_IPCA_12M)+
-      lag(VART_EXPEC_IPCA)+
-      lag(Expec.SELIC)+
-      lag(USDBRL)+
-      lag(Expec.CAMBIO)+
-      lag(VART_DOLAR)+
-      lag(VART_EXPEC_DOLAR)+
-      lag(VART_EXPEC_IBC)+
-      lag(IBC_Br)+
-      GIGANTE+
-      GRANDE+
-      MÉDIO+
-      PEQUENO,
+      IRF_M*PG+
+      IMA_B*PG+
+      IMA_S*PG+
+      SELIC*PG+
+      FUNDO_ESPELHO+
+      VART_IBOV*PG+
+      IPCA*PG+
+      EXPEC_IPCA_12M+
+      Expec.SELIC+
+      Expec.CAMBIO+
+      VART_DOLAR+
+      VART_EXPEC_IBC,
     index = c("CNPJ_FUNDO","TRIMESTRE"),
     data=dados_painel_rf_trimestre_reg, 
     model="within") -> plm_rf_fixo
@@ -1503,12 +1611,8 @@ summary(plm_rf_fixo)
 #### Semestral
 
 ```{r}
-dados_painel_rf_semestre |> 
-    count(CNPJ_FUNDO) |> 
-    filter(n>15) -> fundos_maisde50pct_amostra
 
-dados_painel_rf_semestre |> 
-    filter(CNPJ_FUNDO %in% fundos_maisde50pct_amostra$CNPJ_FUNDO) |> 
+dados_painel_rf_semestre |>  
     mutate(MICRO = if_else(TAMANHO == "Micro",1,0),
            PEQUENO = if_else(TAMANHO == "Pequeno",1,0),
            `MÉDIO` = if_else(TAMANHO == "Médio",1,0),
@@ -1520,7 +1624,6 @@ dados_painel_rf_semestre |>
            IP = if_else(PUBLICO_ALVO == "INVESTIDORES PROFISSIONAIS",1,0),
            PREV = if_else(PUBLICO_ALVO == "PREVIDENCIÁRIO",1,0)) |> 
   group_by(CNPJ_FUNDO) |> 
-  mutate(DANOS = as.factor(SEMESTRE)) |> 
   ungroup() |> 
   mutate(CAPTC_DIA = CAPTC_DIA/1000000,
          RESG_DIA = RESG_DIA/1000000,
@@ -1530,13 +1633,14 @@ dados_painel_rf_semestre |>
          -GRUPO,
          -TAMANHO_CAP,
          -PUBLICO_ALVO) |> 
-  rename(VART_IBOV = `VAR SEMESTRAL(%) IBOV`,
+  rename(VARS_IBOV = `VAR SEMESTRAL(%) IBOV`,
          EXPEC_IPCA_12M = `Expectativa IPCA 12M`,
          `IBC_Br` = `IBC-Br`,
-         VART_DOLAR = `VAR SEMESTRAL(%) Dólar`,
-         VART_EXPEC_IPCA = `VAR SEMESTRAL(%) Expectativa IPCA`,
-         VART_EXPEC_DOLAR = `VAR SEMESTRAL(%) Expec.CAMBIO`,
-         VART_EXPEC_IBC = `VAR SEMESTRAL(%) IBC-Br`) -> dados_painel_rf_semestre_reg
+         VARS_DOLAR = `VAR SEMESTRAL(%) Dólar`,
+         VARS_EXPEC_IPCA = `VAR SEMESTRAL(%) Expectativa IPCA`,
+         VARS_EXPEC_DOLAR = `VAR SEMESTRAL(%) Expec.CAMBIO`,
+         VARS_EXPEC_IBC = `VAR SEMESTRAL(%) IBC-Br`) |> 
+  mutate(SEMESTRE = as.character(SEMESTRE)) -> dados_painel_rf_semestre_reg
 
 plm(CAPTC_LIQ ~
       lag(RENTABILIDADE)*PG+
@@ -1545,22 +1649,18 @@ plm(CAPTC_LIQ ~
       lag(RENTABILIDADE)*GRANDES_BANCOS+
       lag(RENTABILIDADE)*GRANDES_BANCOS*PG+
       lag(RENTABILIDADE)*GRANDES_BANCOS*IQ+
-      lag(IRF_M)*PG+
-      lag(IMA_B)*PG+
-      lag(IMA_S)*PG+
-      lag(SELIC)*PG+
-      lag(IBOV)*PG+
-      lag(VART_IBOV)*PG+
-      lag(IPCA)*PG+
-      lag(EXPEC_IPCA_12M)+
-      lag(VART_EXPEC_IPCA)+
-      lag(Expec.SELIC)+
-      lag(USDBRL)+
-      lag(Expec.CAMBIO)+
-      lag(VART_DOLAR)+
-      lag(VART_EXPEC_DOLAR)+
-      lag(VART_EXPEC_IBC)+
-      lag(IBC_Br)+
+      IRF_M*PG+
+      IMA_B*PG+
+      IMA_S*PG+
+      SELIC*PG+
+      VARS_IBOV*PG+
+      IPCA*PG+
+      EXPEC_IPCA_12M+
+      Expec.SELIC+
+      USDBRL+
+      Expec.CAMBIO+
+      VARS_DOLAR+
+      VARS_EXPEC_DOLAR+
       GIGANTE+
       GRANDE+
       MÉDIO+
@@ -1575,12 +1675,8 @@ summary(plm_rf_fixo)
 #### Anual
 
 ```{r}
-dados_painel_rf_ano |> 
-    count(CNPJ_FUNDO) |> 
-    filter(n>7) -> fundos_maisde50pct_amostra
 
 dados_painel_rf_ano |> 
-    filter(CNPJ_FUNDO %in% fundos_maisde50pct_amostra$CNPJ_FUNDO) |> 
     mutate(MICRO = if_else(TAMANHO == "Micro",1,0),
            PEQUENO = if_else(TAMANHO == "Pequeno",1,0),
            `MÉDIO` = if_else(TAMANHO == "Médio",1,0),
@@ -1602,29 +1698,41 @@ dados_painel_rf_ano |>
          -GRUPO,
          -TAMANHO_CAP,
          -PUBLICO_ALVO) |> 
-  rename(VART_IBOV = `VAR ANUAL(%) IBOV`,
+  rename(VARA_IBOV = `VAR ANUAL(%) IBOV`,
          EXPEC_IPCA_12M = `Expectativa IPCA 12M`,
          `IBC_Br` = `IBC-Br`,
-         VART_DOLAR = `VAR ANUAL(%) Dólar`,
-         VART_EXPEC_IPCA = `VAR ANUAL(%) Expectativa IPCA`,
-         VART_EXPEC_DOLAR = `VAR ANUAL(%) Expec.CAMBIO`,
-         VART_EXPEC_IBC = `VAR ANUAL(%) IBC-Br`) -> dados_painel_rf_ano_reg
+         VARA_DOLAR = `VAR ANUAL(%) Dólar`,
+         VARA_EXPEC_IPCA = `VAR ANUAL(%) Expectativa IPCA`,
+         VARA_EXPEC_DOLAR = `VAR ANUAL(%) Expec.CAMBIO`,
+         VARA_EXPEC_IBC = `VAR ANUAL(%) IBC-Br`) -> dados_painel_rf_ano_reg
 
 plm(CAPTC_LIQ ~
-      lag(RENTABILIDADE)+
-      lag(SELIC)+
-      lag(SELIC)+
-      lag(IBOV)+
-      lag(VART_IBOV)+
-      lag(IPCA)+
-      lag(EXPEC_IPCA_12M)+
-      lag(VART_EXPEC_IPCA)+
-      lag(Expec.SELIC)+
-      lag(USDBRL)+
-      lag(Expec.CAMBIO)+
-      lag(VART_DOLAR)+
-      lag(VART_EXPEC_DOLAR)+
-      lag(VART_EXPEC_IBC),
+      lag(RENTABILIDADE)*PG+
+      lag(RENTABILIDADE)*TRIB_LPRAZO+
+      lag(RENTABILIDADE)*FUNDO_COTAS+
+      lag(RENTABILIDADE)*GRANDES_BANCOS+
+      lag(RENTABILIDADE)*GRANDES_BANCOS*PG+
+      lag(RENTABILIDADE)*GRANDES_BANCOS*IQ+
+      IRF_M*PG+
+      IMA_B*PG+
+      IMA_S*PG+
+      SELIC*PG+
+      IBOV*PG+
+      VARA_IBOV*PG+
+      IPCA*PG+
+      EXPEC_IPCA_12M+
+      VARA_EXPEC_IPCA+
+      Expec.SELIC+
+      USDBRL+
+      Expec.CAMBIO+
+      VARA_DOLAR+
+      VARA_EXPEC_DOLAR+
+      VARA_EXPEC_IBC+
+      IBC_Br+
+      GIGANTE+
+      GRANDE+
+      MÉDIO+
+      PEQUENO,
     index = c("CNPJ_FUNDO","ANO"),
     data=dados_painel_rf_ano_reg, 
     model="within") -> plm_rf_fixo
@@ -1637,12 +1745,8 @@ summary(plm_rf_fixo)
 #### Trimestral
 
 ```{r}
-dados_painel_mm_trimestre |> 
-    count(CNPJ_FUNDO) |> 
-    filter(n>33) -> fundos_maisde50pct_amostra
 
 dados_painel_mm_trimestre |> 
-    filter(CNPJ_FUNDO %in% fundos_maisde50pct_amostra$CNPJ_FUNDO) |> 
     mutate(MICRO = if_else(TAMANHO == "Micro",1,0),
            PEQUENO = if_else(TAMANHO == "Pequeno",1,0),
            `MÉDIO` = if_else(TAMANHO == "Médio",1,0),
@@ -1679,22 +1783,22 @@ plm(CAPTC_LIQ ~
       lag(RENTABILIDADE)*GRANDES_BANCOS+
       lag(RENTABILIDADE)*GRANDES_BANCOS*PG+
       lag(RENTABILIDADE)*GRANDES_BANCOS*IQ+
-      lag(IRF_M)*PG+
-      lag(IMA_B)*PG+
-      lag(IMA_S)*PG+
-      lag(SELIC)*PG+
-      lag(IBOV)*PG+
-      lag(VART_IBOV)*PG+
-      lag(IPCA)*PG+
-      lag(EXPEC_IPCA_12M)+
-      lag(VART_EXPEC_IPCA)+
-      lag(Expec.SELIC)+
-      lag(USDBRL)+
-      lag(Expec.CAMBIO)+
-      lag(VART_DOLAR)+
-      lag(VART_EXPEC_DOLAR)+
-      lag(VART_EXPEC_IBC)+
-      lag(IBC_Br)+
+      IRF_M*PG+
+      IMA_B*PG+
+      IMA_S*PG+
+      SELIC*PG+
+      IBOV*PG+
+      VART_IBOV*PG+
+      IPCA*PG+
+      EXPEC_IPCA_12M+
+      VART_EXPEC_IPCA+
+      Expec.SELIC+
+      USDBRL+
+      Expec.CAMBIO+
+      VART_DOLAR+
+      VART_EXPEC_DOLAR+
+      VART_EXPEC_IBC+
+      IBC_Br+
       GIGANTE+
       GRANDE+
       MÉDIO+
@@ -1709,12 +1813,8 @@ summary(plm_mm_fixo)
 #### Semestral
 
 ```{r}
-dados_painel_mm_semestre |> 
-    count(CNPJ_FUNDO) |> 
-    filter(n>15) -> fundos_maisde50pct_amostra
 
 dados_painel_mm_semestre |> 
-    filter(CNPJ_FUNDO %in% fundos_maisde50pct_amostra$CNPJ_FUNDO) |> 
     mutate(MICRO = if_else(TAMANHO == "Micro",1,0),
            PEQUENO = if_else(TAMANHO == "Pequeno",1,0),
            `MÉDIO` = if_else(TAMANHO == "Médio",1,0),
@@ -1736,13 +1836,13 @@ dados_painel_mm_semestre |>
          -GRUPO,
          -TAMANHO_CAP,
          -PUBLICO_ALVO) |> 
-  rename(VART_IBOV = `VAR SEMESTRAL(%) IBOV`,
+  rename(VARS_IBOV = `VAR SEMESTRAL(%) IBOV`,
          EXPEC_IPCA_12M = `Expectativa IPCA 12M`,
          `IBC_Br` = `IBC-Br`,
-         VART_DOLAR = `VAR SEMESTRAL(%) Dólar`,
-         VART_EXPEC_IPCA = `VAR SEMESTRAL(%) Expectativa IPCA`,
-         VART_EXPEC_DOLAR = `VAR SEMESTRAL(%) Expec.CAMBIO`,
-         VART_EXPEC_IBC = `VAR SEMESTRAL(%) IBC-Br`) -> dados_painel_mm_semestre_reg
+         VARS_DOLAR = `VAR SEMESTRAL(%) Dólar`,
+         VARS_EXPEC_IPCA = `VAR SEMESTRAL(%) Expectativa IPCA`,
+         VARS_EXPEC_DOLAR = `VAR SEMESTRAL(%) Expec.CAMBIO`,
+         VARS_EXPEC_IBC = `VAR SEMESTRAL(%) IBC-Br`) -> dados_painel_mm_semestre_reg
 
 plm(CAPTC_LIQ ~
       lag(RENTABILIDADE)*PG+
@@ -1751,22 +1851,22 @@ plm(CAPTC_LIQ ~
       lag(RENTABILIDADE)*GRANDES_BANCOS+
       lag(RENTABILIDADE)*GRANDES_BANCOS*PG+
       lag(RENTABILIDADE)*GRANDES_BANCOS*IQ+
-      lag(IRF_M)*PG+
-      lag(IMA_B)*PG+
-      lag(IMA_S)*PG+
-      lag(SELIC)*PG+
-      lag(IBOV)*PG+
-      lag(VART_IBOV)*PG+
-      lag(IPCA)*PG+
-      lag(EXPEC_IPCA_12M)+
-      lag(VART_EXPEC_IPCA)+
-      lag(Expec.SELIC)+
-      lag(USDBRL)+
-      lag(Expec.CAMBIO)+
-      lag(VART_DOLAR)+
-      lag(VART_EXPEC_DOLAR)+
-      lag(VART_EXPEC_IBC)+
-      lag(IBC_Br)+
+      IRF_M*PG+
+      IMA_B*PG+
+      IMA_S*PG+
+      SELIC*PG+
+      IBOV*PG+
+      VARS_IBOV*PG+
+      IPCA*PG+
+      EXPEC_IPCA_12M+
+      VARS_EXPEC_IPCA+
+      Expec.SELIC+
+      USDBRL+
+      Expec.CAMBIO+
+      VARS_DOLAR+
+      VARS_EXPEC_DOLAR+
+      VARS_EXPEC_IBC+
+      IBC_Br+
       GIGANTE+
       GRANDE+
       MÉDIO+
@@ -1781,12 +1881,8 @@ summary(plm_mm_fixo)
 #### Anual
 
 ```{r}
-dados_painel_mm_ano |> 
-    count(CNPJ_FUNDO) |> 
-    filter(n>7) -> fundos_maisde50pct_amostra
 
-dados_painel_mm_ano |> 
-    filter(CNPJ_FUNDO %in% fundos_maisde50pct_amostra$CNPJ_FUNDO) |> 
+dados_painel_mm_ano |>  
     mutate(MICRO = if_else(TAMANHO == "Micro",1,0),
            PEQUENO = if_else(TAMANHO == "Pequeno",1,0),
            `MÉDIO` = if_else(TAMANHO == "Médio",1,0),
@@ -1808,13 +1904,13 @@ dados_painel_mm_ano |>
          -GRUPO,
          -TAMANHO_CAP,
          -PUBLICO_ALVO) |> 
-  rename(VART_IBOV = `VAR ANUAL(%) IBOV`,
+  rename(VARA_IBOV = `VAR ANUAL(%) IBOV`,
          EXPEC_IPCA_12M = `Expectativa IPCA 12M`,
          `IBC_Br` = `IBC-Br`,
-         VART_DOLAR = `VAR ANUAL(%) Dólar`,
-         VART_EXPEC_IPCA = `VAR ANUAL(%) Expectativa IPCA`,
-         VART_EXPEC_DOLAR = `VAR ANUAL(%) Expec.CAMBIO`,
-         VART_EXPEC_IBC = `VAR ANUAL(%) IBC-Br`) -> dados_painel_mm_ano_reg
+         VARA_DOLAR = `VAR ANUAL(%) Dólar`,
+         VARA_EXPEC_IPCA = `VAR ANUAL(%) Expectativa IPCA`,
+         VARA_EXPEC_DOLAR = `VAR ANUAL(%) Expec.CAMBIO`,
+         VARA_EXPEC_IBC = `VAR ANUAL(%) IBC-Br`) -> dados_painel_mm_ano_reg
 
 plm(CAPTC_LIQ ~
       lag(RENTABILIDADE)*PG+
@@ -1823,22 +1919,22 @@ plm(CAPTC_LIQ ~
       lag(RENTABILIDADE)*GRANDES_BANCOS+
       lag(RENTABILIDADE)*GRANDES_BANCOS*PG+
       lag(RENTABILIDADE)*GRANDES_BANCOS*IQ+
-      lag(IRF_M)*PG+
-      lag(IMA_B)*PG+
-      lag(IMA_S)*PG+
-      lag(SELIC)*PG+
-      lag(IBOV)*PG+
-      lag(VART_IBOV)*PG+
-      lag(IPCA)*PG+
-      lag(EXPEC_IPCA_12M)+
-      lag(VART_EXPEC_IPCA)+
-      lag(Expec.SELIC)+
-      lag(USDBRL)+
-      lag(Expec.CAMBIO)+
-      lag(VART_DOLAR)+
-      lag(VART_EXPEC_DOLAR)+
-      lag(VART_EXPEC_IBC)+
-      lag(IBC_Br)+
+      IRF_M*PG+
+      IMA_B*PG+
+      IMA_S*PG+
+      SELIC*PG+
+      IBOV*PG+
+      VARA_IBOV*PG+
+      IPCA*PG+
+      EXPEC_IPCA_12M+
+      VARA_EXPEC_IPCA+
+      Expec.SELIC+
+      USDBRL+
+      Expec.CAMBIO+
+      VARA_DOLAR+
+      VARA_EXPEC_DOLAR+
+      VARA_EXPEC_IBC+
+      IBC_Br+
       GIGANTE+
       GRANDE+
       MÉDIO+
@@ -1855,12 +1951,8 @@ summary(plm_mm_fixo)
 #### Trimestral
 
 ```{r}
-# dados_painel_acoes_trimestre |> 
-#     count(CNPJ_FUNDO) |> 
-#     filter(n>33) -> fundos_maisde50pct_amostra
 
 dados_painel_acoes_trimestre |> 
-    # filter(CNPJ_FUNDO %in% fundos_maisde50pct_amostra$CNPJ_FUNDO) |> 
     mutate(MICRO = if_else(TAMANHO == "Micro",1,0),
            PEQUENO = if_else(TAMANHO == "Pequeno",1,0),
            `MÉDIO` = if_else(TAMANHO == "Médio",1,0),
@@ -1897,22 +1989,22 @@ plm(CAPTC_LIQ ~
       lag(RENTABILIDADE)*GRANDES_BANCOS+
       lag(RENTABILIDADE)*GRANDES_BANCOS*PG+
       lag(RENTABILIDADE)*GRANDES_BANCOS*IQ+
-      lag(IRF_M)*PG+
-      lag(IMA_B)*PG+
-      lag(IMA_S)*PG+
-      lag(SELIC)*PG+
-      lag(IBOV)*PG+
-      lag(VART_IBOV)*PG+
-      lag(IPCA)*PG+
-      lag(EXPEC_IPCA_12M)+
-      lag(VART_EXPEC_IPCA)+
-      lag(Expec.SELIC)+
-      lag(USDBRL)+
-      lag(Expec.CAMBIO)+
-      lag(VART_DOLAR)+
-      lag(VART_EXPEC_DOLAR)+
-      lag(VART_EXPEC_IBC)+
-      lag(IBC_Br)+
+      IRF_M*PG+
+      IMA_B*PG+
+      IMA_S*PG+
+      SELIC*PG+
+      IBOV*PG+
+      VART_IBOV*PG+
+      IPCA*PG+
+      EXPEC_IPCA_12M+
+      VART_EXPEC_IPCA+
+      Expec.SELIC+
+      USDBRL+
+      Expec.CAMBIO+
+      VART_DOLAR+
+      VART_EXPEC_DOLAR+
+      VART_EXPEC_IBC+
+      IBC_Br+
       GIGANTE+
       GRANDE+
       MÉDIO+
@@ -1965,22 +2057,22 @@ plm(CAPTC_LIQ ~
       lag(RENTABILIDADE)*GRANDES_BANCOS+
       lag(RENTABILIDADE)*GRANDES_BANCOS*PG+
       lag(RENTABILIDADE)*GRANDES_BANCOS*IQ+
-      lag(IRF_M)*PG+
-      lag(IMA_B)*PG+
-      lag(IMA_S)*PG+
-      lag(SELIC)*PG+
-      lag(IBOV)*PG+
-      lag(VARS_IBOV)*PG+
-      lag(IPCA)*PG+
-      lag(EXPEC_IPCA_12M)+
-      lag(VARS_EXPEC_IPCA)+
-      lag(Expec.SELIC)+
-      lag(USDBRL)+
-      lag(Expec.CAMBIO)+
-      lag(VARS_DOLAR)+
-      lag(VARS_EXPEC_DOLAR)+
-      lag(VARS_EXPEC_IBC)+
-      lag(IBC_Br)+
+      IRF_M*PG+
+      IMA_B*PG+
+      IMA_S*PG+
+      SELIC*PG+
+      IBOV*PG+
+      VARS_IBOV*PG+
+      IPCA*PG+
+      EXPEC_IPCA_12M+
+      VARS_EXPEC_IPCA+
+      Expec.SELIC+
+      USDBRL+
+      Expec.CAMBIO+
+      VARS_DOLAR+
+      VARS_EXPEC_DOLAR+
+      VARS_EXPEC_IBC+
+      IBC_Br+
       GIGANTE+
       GRANDE+
       MÉDIO+
@@ -1995,12 +2087,8 @@ summary(plm_acoes_fixo)
 #### Anual
 
 ```{r}
-dados_painel_acoes_ano |> 
-    count(CNPJ_FUNDO) |> 
-    filter(n>7) -> fundos_maisde50pct_amostra
 
-dados_painel_acoes_ano |> 
-    filter(CNPJ_FUNDO %in% fundos_maisde50pct_amostra$CNPJ_FUNDO) |> 
+dados_painel_acoes_ano |>  
     mutate(MICRO = if_else(TAMANHO == "Micro",1,0),
            PEQUENO = if_else(TAMANHO == "Pequeno",1,0),
            `MÉDIO` = if_else(TAMANHO == "Médio",1,0),
@@ -2031,29 +2119,28 @@ dados_painel_acoes_ano |>
          VARA_EXPEC_IBC = `VAR ANUAL(%) IBC-Br`) -> dados_painel_acoes_ano_reg
 
 plm(CAPTC_LIQ ~
-      PG+
       lag(RENTABILIDADE)*PG+
       lag(RENTABILIDADE)*TRIB_LPRAZO+
       lag(RENTABILIDADE)*FUNDO_COTAS+
       lag(RENTABILIDADE)*GRANDES_BANCOS+
       lag(RENTABILIDADE)*GRANDES_BANCOS*PG+
       lag(RENTABILIDADE)*GRANDES_BANCOS*IQ+
-      lag(IRF_M)*PG+
-      lag(IMA_B)*PG+
-      lag(IMA_S)*PG+
-      lag(SELIC)*PG+
-      lag(IBOV)*PG+
-      lag(VARA_IBOV)*PG+
-      lag(IPCA)*PG+
-      lag(EXPEC_IPCA_12M)+
-      lag(VARA_EXPEC_IPCA)+
-      lag(Expec.SELIC)+
-      lag(USDBRL)+
-      lag(Expec.CAMBIO)+
-      lag(VARA_DOLAR)+
-      lag(VARA_EXPEC_DOLAR)+
-      lag(VARA_EXPEC_IBC)+
-      lag(IBC_Br)+
+      IRF_M*PG+
+      IMA_B*PG+
+      IMA_S*PG+
+      SELIC*PG+
+      IBOV*PG+
+      VARA_IBOV*PG+
+      IPCA*PG+
+      EXPEC_IPCA_12M+
+      VARA_EXPEC_IPCA+
+      Expec.SELIC+
+      USDBRL+
+      Expec.CAMBIO+
+      VARA_DOLAR+
+      VARA_EXPEC_DOLAR+
+      VARA_EXPEC_IBC+
+      IBC_Br+
       GIGANTE+
       GRANDE+
       MÉDIO+
