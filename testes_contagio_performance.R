@@ -134,7 +134,7 @@ taxa_performance_fundos |>
   filter(CNPJ_FUNDO %in% unique(diferenca_vol_acoes_60_dias$CNPJ_FUNDO)) |> 
   lazy_dt() |> 
   group_by(CNPJ_FUNDO) |> 
-  filter(!all(VL_SALDO_BALCTE == 0)) |> 
+  # filter(!all(VL_SALDO_BALCTE == 0)) |>
   mutate(Quartil1 = quantile(VL_SALDO_BALCTE,probs = 0.25),
          Quartil3 = quantile(VL_SALDO_BALCTE,probs = 0.75)) |> 
   mutate(Quartil1 = case_when(VL_SALDO_BALCTE <= Quartil1 ~ 1,
@@ -142,20 +142,23 @@ taxa_performance_fundos |>
   mutate(Quartil3 = case_when(VL_SALDO_BALCTE >= Quartil3 ~ 1,
                               T ~ 0)) |> 
   mutate(Competencia = yearmonth(DT_COMPTC)) |>
-  select(-DT_COMPTC) |> 
+  select(-DT_COMPTC,-PLANO_CONTA_BALCTE ) |> 
   collect() |> 
   ungroup() |> 
   left_join(mutate(diferenca_vol_acoes_60_dias,
                    Competencia = yearmonth(DT_COMPTC))) |> 
   mutate(Quartil = case_when(Quartil1 == 1 ~ "Quartil1",
                              Quartil3 == 1 ~ "Quartil3")) |> 
+  mutate(`Diferença` = `60 Dias Antes`-`60 Dias Depois`) |> 
   filter(!is.na(Quartil)) |> 
   mutate(Mês = factor(format(DT_COMPTC,"%B"))) |>
-  group_by(Mês,Quartil) |> 
-  summarise(`60 Dias Antes` = mean(`60 Dias Antes`,na.rm=T),
-            `60 Dias Depois` = mean(`60 Dias Depois`,na.rm=T),
-            Qtd = n()) |> 
-  mutate(`Diferença` = `60 Dias Antes`-`60 Dias Depois`) |> View()
+  left_join(dados_fundos_acoes) |> 
+  filter(EXISTE_TAXA_PERFM == "S") |> 
+  group_by(Quartil,EXISTE_TAXA_PERFM,POLIT_INVEST) |> 
+  summarise(`60 Dias Antes` = median(`60 Dias Antes`,na.rm=T),
+            `60 Dias Depois` = median(`60 Dias Depois`,na.rm=T),
+            `Diferença` = median(`Diferença`,na.rm=T),
+            Qtd = n())
 
 
 
@@ -175,3 +178,41 @@ taxa_performance_fundos |>
   filter(CNPJ_FUNDO == "00.838.266/0001-08") |> 
   filter(!all(VL_SALDO_BALCTE == 0))
 
+
+diferenca_vol_acoes_60_dias |> 
+  mutate(Competencia = yearmonth(DT_COMPTC)) |> 
+  group_by(Competencia) |> 
+  summarise(Volatilidade = mean(`60 Dias Antes`,na.rm = T)) -> tbl_vol
+
+taxa_performance_fundos |> 
+  filter(CNPJ_FUNDO %in% unique(diferenca_vol_acoes_60_dias$CNPJ_FUNDO)) |> 
+  lazy_dt() |> 
+  group_by(CNPJ_FUNDO) |> 
+  # filter(!all(VL_SALDO_BALCTE == 0)) |>
+  mutate(Quartil1 = quantile(VL_SALDO_BALCTE,probs = 0.25),
+         Quartil3 = quantile(VL_SALDO_BALCTE,probs = 0.75)) |> 
+  mutate(Quartil1 = case_when(VL_SALDO_BALCTE <= Quartil1 ~ 1,
+                              T ~ 0)) |> 
+  mutate(Quartil3 = case_when(VL_SALDO_BALCTE >= Quartil3 ~ 1,
+                              T ~ 0)) |> 
+  mutate(Competencia = yearmonth(DT_COMPTC)) |>
+  select(-DT_COMPTC,-PLANO_CONTA_BALCTE ) |> 
+  collect() |> 
+  ungroup() |> 
+  left_join(mutate(diferenca_vol_acoes_60_dias,
+                   Competencia = yearmonth(DT_COMPTC))) |> 
+  mutate(Quartil = case_when(Quartil1 == 1 ~ "Quartil1",
+                             Quartil3 == 1 ~ "Quartil3",
+                             T ~ "Centro")) |> 
+  filter(!is.na(Quartil)) |> 
+  mutate(Mês = factor(format(DT_COMPTC,"%B"))) |> 
+  group_by(Competencia,Quartil) |>  
+  summarise(Qtd = n()) |> 
+  group_by(Competencia) |> 
+  mutate(`Part(%)` = Qtd/sum(Qtd)) |> 
+  ungroup()  |> 
+  arrange(Competencia) |>
+  filter(Quartil == "Quartil1") |> 
+  left_join(tbl_vol) |> 
+  ggplot(aes(Volatilidade,`Part(%)`)) +
+  geom_point()

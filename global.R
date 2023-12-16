@@ -10,7 +10,17 @@ library(furrr)
 library(stringr)
 library(tsibble)
 library(ggplot2)
-library(plm) 
+library(plm)
+library(panelvar)
+library(dlookr)
+library(ggstatsplot)
+library(ggpubr)
+library(patchwork)
+library(effectsize)
+library(kableExtra)
+library(stargazer)
+library(broom)
+
 
 board <- board_folder("dados_tese/",versioned = T)
 
@@ -62,5 +72,11 @@ BTG <- tibble(CPF_CNPJ_GESTOR = c("60.451.242/0001-23",
 
 
 
-
+roll_trimestre <- timetk::slidify(.f = prod, .period = 4, .align = "right", .partial = TRUE)
+roll_semestre <- timetk::slidify(.f = prod, .period = 2, .align = "right", .partial = TRUE)
+linesep<-function(x,y=character()){
+  if(!length(x))
+    return(y)
+  linesep(x[-length(x)], c(rep('',x[length(x)]-1),'\\addlinespace',y))  
+}
 

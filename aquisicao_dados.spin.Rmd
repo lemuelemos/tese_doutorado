@@ -1,3 +1,5 @@
+
+```{r }
 source("global.R")
 ##### Dados Macroeconômicos #####
 
@@ -360,4 +362,13 @@ pin_write(board,
           CDI,
           "CDI",
           type = "qs")
+```
 
+
+
+---
+title: aquisicao_dados.R
+author: lemue
+date: '2022-12-10'
+
+---
